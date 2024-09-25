@@ -79,10 +79,24 @@ var item = await _metazoApiClient.GetItemAsync(2605115);
 ## SendModelAsync(IpwCrudRequest crudModel)
 
 ```csharp
+Dictionary<string, string> jsonData = new()
+{
+    { "state", "2" },
+};
 
+var fullJson = JsonSerializer.Serialize(jsonData);
+
+IpwCrudRequest crudRequest = new()
+{
+    Datatype = "form121889",
+    Model = ModelOptions.Create,
+    JsonData = fullJson
+};
+
+var crudResponse = await _metazoApiClient.SendModelAsync(crudRequest);
 ```
 
-*Note: I think this might not be working right now. Am still working on it.*
+*Note: You can also use ```ModelOptions.Update``` or ```ModelOptions.Delete```, however these both require the ```ObjectId``` property to be set.*
 
 ## UploadBinfileAsync(BinfileUploadRequest binfileUploadModel)
 
