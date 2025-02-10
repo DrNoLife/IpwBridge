@@ -5,6 +5,11 @@ using System.Text.Json;
 using System.Text;
 using IpwBridge.Contracts;
 using System.Security.Cryptography;
+using System.Net.Http.Headers;
+using IpwBridge.Models.Responses.List;
+using IpwBridge.Models.Responses.Item;
+using IpwBridge.Models.Responses.Datatypes;
+using IpwBridge.Models.Responses.Explanation;
 
 namespace IpwBridge.Services;
 
@@ -19,9 +24,9 @@ public class MetazoApiClient(
     private readonly ITokenProvider _tokenProvider = tokenProvider;
     private readonly IChecksumService _checksumService = checksumService;
 
-    public async Task<JsonElement> GetDatatypesAsync()
+    public async Task<MetazoDatatypesResponse?> GetDatatypesAsync()
     {
-        return await ExecuteWithTokenRefreshAsync(async () =>
+        var json = await ExecuteWithTokenRefreshAsync(async () =>
         {
             var token = await _tokenProvider.GetTokenAsync();
             Dictionary<string, string> parameters = new()
@@ -36,11 +41,13 @@ public class MetazoApiClient(
             var url = BuildUrl("datatypes", parameters);
             return await SendGetRequestAsync(url);
         });
+
+        return JsonSerializer.Deserialize<MetazoDatatypesResponse>(json);
     }
 
-    public async Task<JsonElement> GetExplanationAsync(string datatype)
+    public async Task<MetazoExplanationResponse?> GetExplanationAsync(string datatype)
     {
-        return await ExecuteWithTokenRefreshAsync(async () =>
+        var json = await ExecuteWithTokenRefreshAsync(async () =>
         {
             var token = await _tokenProvider.GetTokenAsync();
             Dictionary<string, string> parameters = new()
@@ -56,6 +63,8 @@ public class MetazoApiClient(
             var url = BuildUrl("explain", parameters);
             return await SendGetRequestAsync(url);
         });
+
+        return JsonSerializer.Deserialize<MetazoExplanationResponse>(json);
     }
 
     public async Task<JsonElement> GetListAsync(ListRequest dataRequest)
@@ -86,6 +95,14 @@ public class MetazoApiClient(
         });
     }
 
+    public async Task<MetazoListResponse<T>?> GetListAsync<T>(ListRequest dataRequest)
+        where T : IMetazoListItem
+    {
+        var response = await GetListAsync(dataRequest);
+
+        return JsonSerializer.Deserialize<MetazoListResponse<T>>(response);
+    }
+
     public async Task<JsonElement> GetItemAsync(int objectId)
     {
         return await ExecuteWithTokenRefreshAsync(async () =>
@@ -105,6 +122,16 @@ public class MetazoApiClient(
             return await SendGetRequestAsync(url);
         });
     }
+
+    public async Task<MetazoItemResponse<T>?> GetItemAsync<T>(int objectId)
+        where T : IMetazoItemObject
+    {
+        var response = await GetItemAsync(objectId);
+
+        return JsonSerializer.Deserialize<MetazoItemResponse<T>>(response);
+    }
+
+
 
     public async Task<JsonElement> SendModelAsync(IpwCrudRequest crudModel)
     {
@@ -145,7 +172,7 @@ public class MetazoApiClient(
             var token = await _tokenProvider.GetTokenAsync();
 
             // Calculate file checksums and prepare query parameters.
-            Dictionary<string, string> fileChecksums = new();
+            Dictionary<string, string> fileChecksums = [];
 
             foreach (var file in model.Files)
             {
@@ -191,16 +218,14 @@ public class MetazoApiClient(
         }
     }
 
-    private async Task<string> CalculateFileChecksumAsync(Stream fileContent)
+    private static async Task<string> CalculateFileChecksumAsync(Stream fileContent)
     {
         fileContent.Position = 0;
         byte[] buffer = new byte[256];
-        int bytesRead = await fileContent.ReadAsync(buffer, 0, 256);
+        int bytesRead = await fileContent.ReadAsync(buffer.AsMemory(0, 256));
+        byte[] hash = SHA1.HashData(buffer.AsSpan(0, bytesRead));
 
-        using var sha1 = SHA1.Create();
-        byte[] hash = sha1.ComputeHash(buffer, 0, bytesRead);
-
-        fileContent.Position = 0; 
+        fileContent.Position = 0;
 
         return BitConverter.ToString(hash).Replace("-", "").ToLowerInvariant();
     }
@@ -263,11 +288,14 @@ public class MetazoApiClient(
     private async Task<JsonElement> SendMultipartFormDataAsync(string url, Dictionary<string, Stream> files)
     {
         var client = _httpClientFactory.CreateClient();
-        using MultipartFormDataContent content = new();
+        using MultipartFormDataContent content = [];
 
         foreach (var file in files)
         {
-            content.Add(new StreamContent(file.Value), file.Key, Guid.NewGuid().ToString());
+            var filePath = ((FileStream)file.Value).Name;
+            var fileNameAndExtension = Path.GetFileName(filePath);
+
+            content.Add(new StreamContent(file.Value), file.Key, fileNameAndExtension);
         }
 
         var response = await client.PostAsync(url, content);
@@ -290,7 +318,7 @@ public class MetazoApiClient(
         }
     }
 
-    private bool IsTokenInvalidError(string errorContent)
+    private static bool IsTokenInvalidError(string errorContent)
     {
         return errorContent.Contains("Token doesn't exist in the database");
     }
