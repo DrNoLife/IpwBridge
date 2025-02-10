@@ -201,5 +201,16 @@ public class CustomIpwModelHere : IMetazoListItem, IMetazoItemObject
 
 ```csharp
 var listResponse = await _metazoApiClient.GetListAsync<CustomIpwModelHere>(request);
+```
+```csharp
 var itemResponse = await _metazoApiClient.GetItemAsync<CustomIpwModelHere>(2842317);
+```
+
+*Note: Some default items for ```GetListAsync``` and ```GetItemAsync``` are included:*
+
+```csharp
+var listResponse = await _metazoApiClient.GetListAsync<MetazoListItem>(request);
+```
+```csharp
+var itemResponse = await _metazoApiClient.GetItemAsync<MetazoItemObject>(2842317);
 ```
