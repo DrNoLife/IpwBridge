@@ -76,7 +76,7 @@ var item = await _metazoApiClient.GetItemAsync(2605115);
 ```
 
 
-## SendModelAsync(IpwCrudRequest crudModel)
+### SendModelAsync(IpwCrudRequest crudModel)
 
 ```csharp
 Dictionary<string, string> jsonData = new()
@@ -98,7 +98,7 @@ var crudResponse = await _metazoApiClient.SendModelAsync(crudRequest);
 
 *Note: You can also use ```ModelOptions.Update``` or ```ModelOptions.Delete```, however these both require the ```ObjectId``` property to be set.*
 
-## UploadBinfileAsync(BinfileUploadRequest binfileUploadModel)
+### UploadBinfileAsync(BinfileUploadRequest binfileUploadModel)
 
 ```csharp
 using var fileStream = File.OpenRead("testimg.png");
@@ -114,3 +114,92 @@ WritePretty(await _metazoApiClient.UploadBinfileAsync(uploadRequest));
 ```
 
 *Note: While I haven't tested it, it should also be able to handle multiple files being uploaded at once.*
+
+
+## Responses and Custom Models
+
+As of version 1.2.0 some default models has been included to help with the ease of use when deserializing the response.
+
+As an example, to get a list of all datatypes in the system, one had to do the following:
+
+- Call ```.GetDatatypesAsync()```.
+- Create a custom model, which modeled the response.
+- Deserialize the response based on the newly created model.
+
+Now, this has been replaced, and one can just simply call the method.
+
+The interface the client is using is the following:
+
+```csharp
+public interface IMetazoApiClient
+{
+    Task<MetazoDatatypesResponse?> GetDatatypesAsync();
+    Task<MetazoExplanationResponse?> GetExplanationAsync(string datatype);
+
+    Task<JsonElement> GetListAsync(ListRequest dataRequest);
+    Task<MetazoListResponse<T>?> GetListAsync<T>(ListRequest dataRequest) 
+        where T : IMetazoListItem;
+
+    Task<JsonElement> GetItemAsync(int objectId);
+    Task<MetazoItemResponse<T>?> GetItemAsync<T>(int objectId) 
+        where T : IMetazoItemObject;
+
+    Task<JsonElement> SendModelAsync(IpwCrudRequest crudModel);
+    Task<JsonElement> UploadBinfileAsync(BinfileUploadRequest binfileUploadModel);
+}
+```
+
+As one can see, one can provide a custom object for both ```GetListAsync()``` and ```GetItemAsync```.
+In order to work with this, create a new item which inherits the ```IMetazoListItem``` (for list results) or ```IMetazoItemObject``` (for item results) interface.
+
+Examples:
+
+```csharp
+public class CustomIpwModelHere : IMetazoListItem
+{
+    [JsonPropertyName("f2842251")]
+    public required string Number { get; set; }
+
+    [JsonPropertyName("f2842252")]
+    public required string Name { get; set; }
+
+    [JsonPropertyName("f2842253")]
+    public required string Description { get; set; }
+
+    [JsonPropertyName("objectid")]
+    public required string ObjectId { get; set; }
+
+    [JsonPropertyName("language")]
+    public required string Language { get; set; }
+}
+```
+
+Furthermore, you can also add multiple interfaces to the same model, if you desire, and thus use it in multiple places:
+
+```csharp
+public class CustomIpwModelHere : IMetazoListItem, IMetazoItemObject
+{
+    [JsonPropertyName("f2842251")]
+    public required string Number { get; set; }
+
+    [JsonPropertyName("f2842252")]
+    public required string Name { get; set; }
+
+    [JsonPropertyName("f2842253")]
+    public required string Description { get; set; }
+
+    [JsonPropertyName("objectid")]
+    public required string ObjectId { get; set; }
+
+    [JsonPropertyName("language")]
+    public required string Language { get; set; }
+
+    [JsonPropertyName("site")]
+    public string Site { get; set; } = String.Empty;
+}
+```
+
+```csharp
+var listResponse = await _metazoApiClient.GetListAsync<CustomIpwModelHere>(request);
+var itemResponse = await _metazoApiClient.GetItemAsync<CustomIpwModelHere>(2842317);
+```
