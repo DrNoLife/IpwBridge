@@ -221,7 +221,7 @@ Console.WriteLine(uploadResponse);
 
 ### Models and JSON Property Annotations
 
-MetazoBridge uses JSON property annotations to map JSON fields to your model properties. You can create your own models by implementing the provided interfaces.
+IpwBridge uses JSON property annotations to map JSON fields to your model properties. You can create your own models by implementing the provided interfaces.
 
 **Default Models**
 
