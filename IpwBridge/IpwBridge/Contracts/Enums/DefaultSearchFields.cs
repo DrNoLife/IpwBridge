@@ -1,5 +1,8 @@
 ﻿namespace IpwBridge.Contracts.Enums;
 
+/// <summary>
+/// Enumerates the default fields available for search filtering in the IPW Metazo API.
+/// </summary>
 public enum DefaultSearchFields
 {
     ObjectId,

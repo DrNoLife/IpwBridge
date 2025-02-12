@@ -10,10 +10,16 @@ using IpwBridge.Models.Responses.Item;
 using IpwBridge.Models.Responses.Datatypes;
 using IpwBridge.Models.Responses.Explanation;
 using Microsoft.Extensions.Logging;
-using System.Threading;
 
 namespace IpwBridge.Services;
 
+/// <summary>
+/// Provides a client for interacting with the IPW Metazo API.
+/// </summary>
+/// <remarks>
+/// This client handles token authentication, checksum calculation, and makes HTTP calls to the API endpoints.
+/// It supports operations such as retrieving data types, explanations, lists, items, sending models, and uploading binary files.
+/// </remarks>
 public class MetazoApiClient(
     IOptions<MetazoApiOptions> options,
     IHttpClientFactory httpClientFactory,
@@ -27,6 +33,14 @@ public class MetazoApiClient(
     private readonly IChecksumService _checksumService = checksumService;
     private readonly ILogger<MetazoApiClient> _logger = logger;
 
+    /// <summary>
+    /// Retrieves the available data types from the API.
+    /// </summary>
+    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
+    /// <returns>
+    /// A task representing the asynchronous operation. The task result contains a <see cref="MetazoDatatypesResponse"/>
+    /// describing the available data types.
+    /// </returns>
     public async Task<MetazoDatatypesResponse?> GetDatatypesAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("Calling GetDatatypesAsync.");
@@ -49,6 +63,15 @@ public class MetazoApiClient(
         return JsonSerializer.Deserialize<MetazoDatatypesResponse>(json);
     }
 
+    /// <summary>
+    /// Retrieves an explanation for the specified data type.
+    /// </summary>
+    /// <param name="datatype">The data type for which an explanation is requested.</param>
+    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
+    /// <returns>
+    /// A task representing the asynchronous operation. The task result contains a <see cref="MetazoExplanationResponse"/>
+    /// with details about the data type.
+    /// </returns>
     public async Task<MetazoExplanationResponse?> GetExplanationAsync(string datatype, CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("Calling GetExplanationAsync for datatype: {Datatype}", datatype);
@@ -72,6 +95,15 @@ public class MetazoApiClient(
         return JsonSerializer.Deserialize<MetazoExplanationResponse>(json);
     }
 
+    /// <summary>
+    /// Retrieves a list of items from the API based on the specified request parameters.
+    /// </summary>
+    /// <param name="dataRequest">The parameters for retrieving the list of items.</param>
+    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
+    /// <returns>
+    /// A task representing the asynchronous operation. The task result contains a <see cref="JsonElement"/>
+    /// representing the list response.
+    /// </returns>
     public async Task<JsonElement> GetListAsync(ListRequest dataRequest, CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("Calling GetListAsync with DataType: {DataType}", dataRequest.DataType);
@@ -100,13 +132,34 @@ public class MetazoApiClient(
         }, cancellationToken);
     }
 
+    /// <summary>
+    /// Retrieves a list of items from the API and deserializes them into a specified type.
+    /// </summary>
+    /// <typeparam name="T">
+    /// The type into which the list items will be deserialized. This type must implement <see cref="IMetazoListItem"/>.
+    /// </typeparam>
+    /// <param name="dataRequest">The parameters for retrieving the list of items.</param>
+    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
+    /// <returns>
+    /// A task representing the asynchronous operation. The task result contains a <see cref="MetazoListResponse{T}"/>
+    /// with the deserialized list data.
+    /// </returns>
     public async Task<MetazoListResponse<T>?> GetListAsync<T>(ListRequest dataRequest, CancellationToken cancellationToken = default)
         where T : IMetazoListItem
     {
         var response = await GetListAsync(dataRequest, cancellationToken);
         return JsonSerializer.Deserialize<MetazoListResponse<T>>(response);
     }
-
+    
+    /// <summary>
+    /// Retrieves a specific item from the API based on its object ID.
+    /// </summary>
+    /// <param name="objectId">The unique identifier of the object to retrieve.</param>
+    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
+    /// <returns>
+    /// A task representing the asynchronous operation. The task result contains a <see cref="JsonElement"/>
+    /// representing the item.
+    /// </returns>
     public async Task<JsonElement> GetItemAsync(int objectId, CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("Calling GetItemAsync for ObjectId: {ObjectId}", objectId);
@@ -128,6 +181,18 @@ public class MetazoApiClient(
         }, cancellationToken);
     }
 
+    /// <summary>
+    /// Retrieves a specific item from the API and deserializes it into a specified type.
+    /// </summary>
+    /// <typeparam name="T">
+    /// The type into which the item will be deserialized. This type must implement <see cref="IMetazoItemObject"/>.
+    /// </typeparam>
+    /// <param name="objectId">The unique identifier of the object to retrieve.</param>
+    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
+    /// <returns>
+    /// A task representing the asynchronous operation. The task result contains a <see cref="MetazoItemResponse{T}"/>
+    /// with the deserialized item data.
+    /// </returns>
     public async Task<MetazoItemResponse<T>?> GetItemAsync<T>(int objectId, CancellationToken cancellationToken = default)
         where T : IMetazoItemObject
     {
@@ -135,6 +200,17 @@ public class MetazoApiClient(
         return JsonSerializer.Deserialize<MetazoItemResponse<T>>(response);
     }
 
+    /// <summary>
+    /// Sends a CRUD model request to the API.
+    /// </summary>
+    /// <param name="crudModel">
+    /// The CRUD request model containing the operation, data type, and JSON payload.
+    /// </param>
+    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
+    /// <returns>
+    /// A task representing the asynchronous operation. The task result contains a <see cref="JsonElement"/>
+    /// representing the API response.
+    /// </returns>
     public async Task<JsonElement> SendModelAsync(IpwCrudRequest crudModel, CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("Calling SendModelAsync for Datatype: {Datatype}, Model: {Model}", crudModel.Datatype, crudModel.Model);
@@ -162,6 +238,17 @@ public class MetazoApiClient(
         }, cancellationToken);
     }
 
+    /// <summary>
+    /// Uploads binary files to the API.
+    /// </summary>
+    /// <param name="model">
+    /// The binary file upload request model containing the parent ID and file streams.
+    /// </param>
+    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
+    /// <returns>
+    /// A task representing the asynchronous operation. The task result contains a <see cref="JsonElement"/>
+    /// representing the API response.
+    /// </returns>
     public async Task<JsonElement> UploadBinfileAsync(BinfileUploadRequest model, CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("Calling UploadBinfileAsync for ParentId: {ParentId}", model.ParentId);
