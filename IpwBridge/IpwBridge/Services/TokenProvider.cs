@@ -2,6 +2,7 @@
 using System.Text.Json;
 using IpwBridge.Models;
 using IpwBridge.Interfaces;
+using System.Threading;
 
 namespace IpwBridge.Services;
 
@@ -17,14 +18,14 @@ public class TokenProvider(
     private string _token = String.Empty;
     private DateTime _tokenExpiry;
 
-    public async Task<string> GetTokenAsync()
+    public async Task<string> GetTokenAsync(CancellationToken cancellationToken = default)
     {
         if (!String.IsNullOrEmpty(_token) && DateTime.UtcNow < _tokenExpiry)
         {
             return _token;
         }
 
-        await _semaphore.WaitAsync();
+        await _semaphore.WaitAsync(cancellationToken);
         try
         {
             if (!String.IsNullOrEmpty(_token) && DateTime.UtcNow < _tokenExpiry)
@@ -32,7 +33,7 @@ public class TokenProvider(
                 return _token;
             }
 
-            _token = await AuthenticateAsync();
+            _token = await AuthenticateAsync(cancellationToken);
             _tokenExpiry = DateTime.UtcNow.AddMinutes(25);
             return _token;
         }
@@ -42,16 +43,16 @@ public class TokenProvider(
         }
     }
 
-    public async Task RefreshTokenAsync()
+    public async Task RefreshTokenAsync(CancellationToken cancellationToken = default)
     {
-        await _semaphore.WaitAsync();
+        await _semaphore.WaitAsync(cancellationToken);
         try
         {
             _token = String.Empty;
             _tokenExpiry = DateTime.MinValue;
 
             // Reauthenticate.
-            _token = await AuthenticateAsync();
+            _token = await AuthenticateAsync(cancellationToken);
             _tokenExpiry = DateTime.UtcNow.AddMinutes(25);
         }
         finally
@@ -60,7 +61,7 @@ public class TokenProvider(
         }
     }
 
-    private async Task<string> AuthenticateAsync()
+    private async Task<string> AuthenticateAsync(CancellationToken cancellationToken = default)
     {
         Dictionary<string, string> parameters = new()
         {
@@ -78,17 +79,17 @@ public class TokenProvider(
         var url = $"{_options.IpwUrl}authenticate?{query}";
 
         var client = _httpClientFactory.CreateClient();
-        var response = await client.GetAsync(url);
+        var response = await client.GetAsync(url, cancellationToken);
 
         if (response.IsSuccessStatusCode)
         {
-            var content = await response.Content.ReadAsStringAsync();
+            var content = await response.Content.ReadAsStringAsync(cancellationToken);
             var authResponse = JsonSerializer.Deserialize<IpwAuthenticationSuccessMessage>(content);
             return authResponse?.Token ?? throw new Exception($"Failed to get authentication token, despite API giving good response. {response.StatusCode}");
         }
         else
         {
-            var errorContent = await response.Content.ReadAsStringAsync();
+            var errorContent = await response.Content.ReadAsStringAsync(cancellationToken);
             throw new Exception($"Authentication failed: {response.StatusCode} - {errorContent}");
         }
     }

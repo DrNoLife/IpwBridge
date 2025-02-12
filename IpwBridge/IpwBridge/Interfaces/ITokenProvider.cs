@@ -2,6 +2,6 @@
 
 public interface ITokenProvider
 {
-    Task<string> GetTokenAsync();
-    Task RefreshTokenAsync();
+    Task<string> GetTokenAsync(CancellationToken cancellationToken = default);
+    Task RefreshTokenAsync(CancellationToken cancellationToken = default);
 }
