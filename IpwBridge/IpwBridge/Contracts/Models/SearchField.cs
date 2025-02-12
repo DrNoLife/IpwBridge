@@ -8,10 +8,14 @@ namespace IpwBridge.Contracts.Models;
 /// <remarks>
 /// This readonly struct supports implicit conversion from both <see cref="DefaultSearchFields"/> and <see cref="string"/>.
 /// </remarks>
-/// <remarks>
-/// Initializes a new instance of the <see cref="SearchField"/> struct.
-/// </remarks>
-/// <param name="value">The string value representing the search field.</param>
+/// <example>
+/// <code language="csharp"><![CDATA[
+/// // Example: Implicit conversion of a DefaultSearchFields enum to SearchField.
+/// SearchField field = DefaultSearchFields.Created;
+/// // Example: Explicit setting of string value.
+/// SearchField field = "created";
+/// ]]></code>
+/// </example>
 public readonly struct SearchField(string value)
 {
     /// <summary>

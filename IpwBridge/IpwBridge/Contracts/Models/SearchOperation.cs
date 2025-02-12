@@ -8,10 +8,14 @@ namespace IpwBridge.Contracts.Models;
 /// <remarks>
 /// This readonly struct supports implicit conversion from both <see cref="SearchOperator"/> and <see cref="string"/>.
 /// </remarks>
-/// <remarks>
-/// Initializes a new instance of the <see cref="SearchOperation"/> struct.
-/// </remarks>
-/// <param name="value">The string value representing the search operation.</param>
+/// <example>
+/// <code language="csharp"><![CDATA[
+/// // Example: Implicit conversion of a SearchOperator enum to SearchOperation.
+/// SearchOperation operation = SearchOperator.LessEqual;
+/// // Example: Explicit setting of string value.
+/// SearchOperation operation = "LESSEQUAL";
+/// ]]></code>
+/// </example>
 public readonly struct SearchOperation(string value)
 {
     /// <summary>

@@ -8,10 +8,14 @@ namespace IpwBridge.Contracts.Models;
 /// <remarks>
 /// This readonly struct supports implicit conversion from both <see cref="SearchConnector"/> and <see cref="string"/>.
 /// </remarks>
-/// <remarks>
-/// Initializes a new instance of the <see cref="SearchConnection"/> struct.
-/// </remarks>
-/// <param name="value">The string value representing the search connection.</param>
+/// <example>
+/// <code language="csharp"><![CDATA[
+/// // Example: Implicit conversion of a SearchConnector enum to SearchConnection.
+/// SearchConnection connection = SearchConnector.Or;
+/// // Example: Explicit setting of string value.
+/// SearchConnection connection = "OR";
+/// ]]></code>
+/// </example>
 public readonly struct SearchConnection(string value)
 {
     /// <summary>

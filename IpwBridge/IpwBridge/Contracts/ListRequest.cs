@@ -10,6 +10,23 @@ namespace IpwBridge.Contracts;
 /// The <see cref="ListRequest"/> class contains properties for specifying the data type, which fields to retrieve,
 /// limits and offsets for pagination, as well as filtering options such as search criteria and date ranges.
 /// </remarks>
+/// <example>
+/// <code language="csharp"><![CDATA[
+/// // Example: Creating a ListRequest using enums (implicit conversion to structs)
+/// ListRequest request = new ListRequest
+/// {
+///     DataType = "form121889",
+///     FieldsToGet = "f276474,f1628152,f2605112",
+///     Limit = 20,
+///     Offset = 0,
+///     SearchAndOr = SearchConnector.And,           // Implicit conversion to SearchConnection.
+///     SearchField = DefaultSearchFields.ObjectId,    // Implicit conversion to SearchField.
+///     SearchOperation = SearchOperator.GreaterEqual, // Implicit conversion to SearchOperation.
+///     SearchAfter = "2604436",
+///     FromDate = DateTime.UtcNow.AddDays(-30)
+/// };
+/// ]]></code>
+/// </example>
 public class ListRequest
 {
     /// <summary>
