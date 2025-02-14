@@ -2,7 +2,7 @@
 
 namespace IpwBridge.Models;
 
-public class IpwAuthenticationSuccessMessage
+public sealed class IpwAuthenticationSuccessMessage
 {
     public bool Success 
         => Status.Equals("true", StringComparison.OrdinalIgnoreCase);

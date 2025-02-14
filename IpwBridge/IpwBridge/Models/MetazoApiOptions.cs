@@ -1,6 +1,6 @@
 ﻿namespace IpwBridge.Models;
 
-public class MetazoApiOptions
+public sealed class MetazoApiOptions
 {
     public string IpwUrl { get; set; } = String.Empty;
     public string IpwUser { get; set; } = String.Empty;

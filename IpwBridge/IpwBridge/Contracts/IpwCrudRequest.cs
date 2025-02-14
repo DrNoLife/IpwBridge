@@ -9,7 +9,7 @@ namespace IpwBridge.Contracts;
 /// The <see cref="IpwCrudRequest"/> class contains information required to perform a CRUD operation,
 /// including the data type, the type of model operation, and the JSON payload.
 /// </remarks>
-public class IpwCrudRequest
+public sealed class IpwCrudRequest
 {
     /// <summary>
     /// Gets or sets the data type on which the CRUD operation is to be performed.
