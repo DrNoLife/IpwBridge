@@ -27,7 +27,7 @@ public class ApiRequestSender(IHttpClientFactory httpClientFactory, ILogger<ApiR
         {
             string errorContent = await response.Content.ReadAsStringAsync(cancellationToken);
             HandleErrorResponse(response.StatusCode.ToString(), errorContent);
-            throw new ApiException("Unhandled error in GET request."); // Should not reach here.
+            throw new IpwBridgeCommunicationException("Unhandled error in GET request."); // Should not reach here.
         }
     }
 
@@ -48,7 +48,7 @@ public class ApiRequestSender(IHttpClientFactory httpClientFactory, ILogger<ApiR
         {
             string errorContent = await response.Content.ReadAsStringAsync(cancellationToken);
             HandleErrorResponse(response.StatusCode.ToString(), errorContent);
-            throw new ApiException("Unhandled error in POST request."); // Should not reach here.
+            throw new IpwBridgeCommunicationException("Unhandled error in POST request."); // Should not reach here.
         }
     }
 
@@ -76,7 +76,7 @@ public class ApiRequestSender(IHttpClientFactory httpClientFactory, ILogger<ApiR
         {
             string errorContent = await response.Content.ReadAsStringAsync(cancellationToken);
             HandleErrorResponse(response.StatusCode.ToString(), errorContent);
-            throw new ApiException("Unhandled error in multipart request."); // Should not reach here.
+            throw new IpwBridgeCommunicationException("Unhandled error in multipart request."); // Should not reach here.
         }
     }
 
@@ -88,7 +88,7 @@ public class ApiRequestSender(IHttpClientFactory httpClientFactory, ILogger<ApiR
         }
             
         _logger.LogError("Error calling API: {StatusCode} - {ErrorContent}", statusCode, errorContent);
-        throw new ApiException($"Error calling API: {statusCode} - {errorContent}");
+        throw new IpwBridgeCommunicationException($"Error calling API: {statusCode} - {errorContent}");
     }
 
     private static bool IsTokenInvalidError(string errorContent)
