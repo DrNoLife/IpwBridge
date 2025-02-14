@@ -6,10 +6,13 @@ using System.Text.RegularExpressions;
 
 namespace IpwBridge.Services;
 
-public class UrlBuilder(IOptions<MetazoApiOptions> options, ILogger<UrlBuilder> logger) : IUrlBuilder
+public partial class UrlBuilder(IOptions<MetazoApiOptions> options, ILogger<UrlBuilder> logger) : IUrlBuilder
 {
     private readonly MetazoApiOptions _options = options?.Value ?? throw new ArgumentNullException(nameof(options));
     private readonly ILogger<UrlBuilder> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+
+    [GeneratedRegex("(?<=token=)[^&]*", RegexOptions.IgnoreCase)]
+    private static partial Regex TokenRegex();
 
     public string BuildUrl(string endpoint, Dictionary<string, string> parameters)
     {
@@ -46,6 +49,6 @@ public class UrlBuilder(IOptions<MetazoApiOptions> options, ILogger<UrlBuilder> 
         }
 
         // Replace the value for the "token" parameter with "<token-hidden>".
-        return Regex.Replace(url, "(?<=token=)[^&]*", "<token-hidden>", RegexOptions.IgnoreCase);
+        return TokenRegex().Replace(url, "<token-hidden>");
     }
 }
