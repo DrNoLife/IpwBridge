@@ -4,10 +4,8 @@ namespace IpwBridge.Interfaces.Services;
 
 public interface IApiRequestSender
 {
-    Task<JsonElement> SendGetRequestAsync(string url, CancellationToken cancellationToken = default);
     Task<T> SendGetRequestAsync<T>(string url, CancellationToken cancellationToken = default);
 
-    Task<JsonElement> SendPostRequestAsync(string url, string jsonData, CancellationToken cancellationToken = default);
     Task<T> SendPostRequestAsync<T>(string url, string jsonData, CancellationToken cancellationToken = default);
 
     Task<JsonElement> SendMultipartFormDataAsync(string url, Dictionary<string, Stream> files, CancellationToken cancellationToken = default);

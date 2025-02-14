@@ -50,7 +50,8 @@ public class MetazoApiClient(
     public async Task<MetazoDatatypesResponse?> GetDatatypesAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("Calling GetDatatypesAsync.");
-        var json = await ExecuteWithTokenRefreshAsync(async ct =>
+
+        return await ExecuteWithTokenRefreshAsync(async ct =>
         {
             var token = await _tokenProvider.GetTokenAsync(ct);
             Dictionary<string, string> parameters = new()
@@ -63,10 +64,8 @@ public class MetazoApiClient(
 
             var url = _urlBuilder.BuildUrl("datatypes", parameters);
 
-            return await _apiRequestSender.SendGetRequestAsync(url, ct);
+            return await _apiRequestSender.SendGetRequestAsync<MetazoDatatypesResponse>(url, ct);
         }, cancellationToken);
-
-        return JsonSerializer.Deserialize<MetazoDatatypesResponse>(json);
     }
 
     /// <summary>
@@ -81,7 +80,8 @@ public class MetazoApiClient(
     public async Task<MetazoExplanationResponse?> GetExplanationAsync(string datatype, CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("Calling GetExplanationAsync for datatype: {Datatype}", datatype);
-        var json = await ExecuteWithTokenRefreshAsync(async ct =>
+
+        return await ExecuteWithTokenRefreshAsync(async ct =>
         {
             var token = await _tokenProvider.GetTokenAsync(ct);
             Dictionary<string, string> parameters = new()
@@ -95,10 +95,8 @@ public class MetazoApiClient(
 
             var url = _urlBuilder.BuildUrl("explain", parameters);
 
-            return await _apiRequestSender.SendGetRequestAsync(url, ct);
+            return await _apiRequestSender.SendGetRequestAsync<MetazoExplanationResponse>(url, ct);
         }, cancellationToken);
-
-        return JsonSerializer.Deserialize<MetazoExplanationResponse>(json);
     }
 
     /// <summary>
@@ -134,7 +132,7 @@ public class MetazoApiClient(
 
             var url = _urlBuilder.BuildUrl("list", parameters);
 
-            return await _apiRequestSender.SendGetRequestAsync(url, ct);
+            return await _apiRequestSender.SendGetRequestAsync<JsonElement>(url, ct);
         }, cancellationToken);
     }
 
@@ -205,7 +203,7 @@ public class MetazoApiClient(
 
             var url = _urlBuilder.BuildUrl("read", parameters);
 
-            return await _apiRequestSender.SendGetRequestAsync(url, ct);
+            return await _apiRequestSender.SendGetRequestAsync<JsonElement>(url, ct);
         }, cancellationToken);
     }
 
@@ -224,8 +222,23 @@ public class MetazoApiClient(
     public async Task<MetazoItemResponse<T>?> GetItemAsync<T>(int objectId, CancellationToken cancellationToken = default)
         where T : IMetazoItemObject
     {
-        var response = await GetItemAsync(objectId, cancellationToken);
-        return JsonSerializer.Deserialize<MetazoItemResponse<T>>(response);
+        _logger.LogInformation("Calling GetItemAsync for ObjectId: {ObjectId}", objectId);
+        return await ExecuteWithTokenRefreshAsync(async ct =>
+        {
+            var token = await _tokenProvider.GetTokenAsync(ct);
+            Dictionary<string, string> parameters = new()
+            {
+                { "objectid", objectId.ToString() },
+                { "token", token }
+            };
+
+            var checksum = _checksumService.CalculateChecksum(parameters, _options.ChecksumSecret);
+            parameters.Add("checksum", checksum);
+
+            var url = _urlBuilder.BuildUrl("read", parameters);
+
+            return await _apiRequestSender.SendGetRequestAsync<MetazoItemResponse<T>>(url, ct);
+        }, cancellationToken);
     }
 
     /// <summary>
@@ -262,7 +275,7 @@ public class MetazoApiClient(
 
             var url = _urlBuilder.BuildUrl("model", parameters);
 
-            return await _apiRequestSender.SendPostRequestAsync(url, crudModel.JsonData, ct);
+            return await _apiRequestSender.SendPostRequestAsync<JsonElement>(url, crudModel.JsonData, ct);
         }, cancellationToken);
     }
 
