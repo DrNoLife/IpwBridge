@@ -1,4 +1,4 @@
-﻿using IpwBridge.Interfaces;
+﻿using IpwBridge.Interfaces.Services;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;

@@ -7,6 +7,8 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "IpwBridge", "IpwBridge\IpwB
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "IpwBridge.Testing", "IpwBridge.Testing\IpwBridge.Testing.csproj", "{84549D81-34CE-3180-DF6D-0DFD4B68911F}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "IpwBridge.Benchmarks", "IpwBridge.Benchmarks\IpwBridge.Benchmarks.csproj", "{50C470F3-BF73-4FC3-90BF-6C0D8815A9F7}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -21,6 +23,10 @@ Global
 		{84549D81-34CE-3180-DF6D-0DFD4B68911F}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{84549D81-34CE-3180-DF6D-0DFD4B68911F}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{84549D81-34CE-3180-DF6D-0DFD4B68911F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{50C470F3-BF73-4FC3-90BF-6C0D8815A9F7}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{50C470F3-BF73-4FC3-90BF-6C0D8815A9F7}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{50C470F3-BF73-4FC3-90BF-6C0D8815A9F7}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{50C470F3-BF73-4FC3-90BF-6C0D8815A9F7}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

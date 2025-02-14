@@ -1,6 +1,6 @@
 ﻿namespace IpwBridge.Models;
 
-public class IpwModel
+public sealed class IpwModel
 {
     public string Username { get; set; } = String.Empty;
     public string Password { get; set; } = String.Empty;

@@ -1,4 +1,5 @@
 ﻿using IpwBridge.Contracts.Enums;
+using System.Diagnostics.CodeAnalysis;
 
 namespace IpwBridge.Contracts.Models;
 
@@ -16,7 +17,7 @@ namespace IpwBridge.Contracts.Models;
 /// SearchField field = "created";
 /// ]]></code>
 /// </example>
-public readonly struct SearchField(string value)
+public readonly struct SearchField(string value) : IEquatable<SearchField>
 {
     /// <summary>
     /// Gets the string value representing the search field.
@@ -49,4 +50,19 @@ public readonly struct SearchField(string value)
     /// </summary>
     /// <returns>A string that represents the current search field.</returns>
     public override string ToString() => Value;
+
+    public override bool Equals([NotNullWhen(true)] object? obj)
+    => obj is SearchField other && Equals(other);
+
+    public bool Equals(SearchField other)
+        => String.Equals(Value, other.Value, StringComparison.Ordinal);
+
+    public static bool operator ==(SearchField left, SearchField right)
+        => left.Equals(right);
+
+    public static bool operator !=(SearchField left, SearchField right)
+        => !(left == right);
+
+    public override int GetHashCode()
+        => StringComparer.Ordinal.GetHashCode(Value);
 }

@@ -1,5 +1,4 @@
-﻿using IpwBridge.Interfaces;
-using IpwBridge.Models;
+﻿using IpwBridge.Models;
 using Microsoft.Extensions.Options;
 using System.Text.Json;
 using System.Text;
@@ -10,6 +9,9 @@ using IpwBridge.Models.Responses.Item;
 using IpwBridge.Models.Responses.Datatypes;
 using IpwBridge.Models.Responses.Explanation;
 using Microsoft.Extensions.Logging;
+using IpwBridge.Interfaces.Services;
+using IpwBridge.Interfaces.Models;
+using IpwBridge.Exceptions;
 
 namespace IpwBridge.Services;
 
@@ -22,16 +24,20 @@ namespace IpwBridge.Services;
 /// </remarks>
 public class MetazoApiClient(
     IOptions<MetazoApiOptions> options,
-    IHttpClientFactory httpClientFactory,
     ITokenProvider tokenProvider,
     IChecksumService checksumService,
-    ILogger<MetazoApiClient> logger) : IMetazoApiClient
+    ILogger<MetazoApiClient> logger,
+    IFileChecksumService fileChecksumService,
+    IUrlBuilder urlBuilder,
+    IApiRequestSender apiRequestSender) : IMetazoApiClient
 {
     private readonly MetazoApiOptions _options = options.Value;
-    private readonly IHttpClientFactory _httpClientFactory = httpClientFactory;
     private readonly ITokenProvider _tokenProvider = tokenProvider;
     private readonly IChecksumService _checksumService = checksumService;
     private readonly ILogger<MetazoApiClient> _logger = logger;
+    private readonly IFileChecksumService _fileChecksumService = fileChecksumService;
+    private readonly IUrlBuilder _urlBuilder = urlBuilder;
+    private readonly IApiRequestSender _apiRequestSender = apiRequestSender;
 
     /// <summary>
     /// Retrieves the available data types from the API.
@@ -44,7 +50,8 @@ public class MetazoApiClient(
     public async Task<MetazoDatatypesResponse?> GetDatatypesAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("Calling GetDatatypesAsync.");
-        var json = await ExecuteWithTokenRefreshAsync(async ct =>
+
+        return await ExecuteWithTokenRefreshAsync(async ct =>
         {
             var token = await _tokenProvider.GetTokenAsync(ct);
             Dictionary<string, string> parameters = new()
@@ -55,12 +62,10 @@ public class MetazoApiClient(
             var checksum = _checksumService.CalculateChecksum(parameters, _options.ChecksumSecret);
             parameters.Add("checksum", checksum);
 
-            var url = BuildUrl("datatypes", parameters);
-            _logger.LogDebug("Requesting URL: {Url}", url);
-            return await SendGetRequestAsync(url, ct);
-        }, cancellationToken);
+            var url = _urlBuilder.BuildUrl("datatypes", parameters);
 
-        return JsonSerializer.Deserialize<MetazoDatatypesResponse>(json);
+            return await _apiRequestSender.SendGetRequestAsync<MetazoDatatypesResponse>(url, ct);
+        }, cancellationToken);
     }
 
     /// <summary>
@@ -75,7 +80,8 @@ public class MetazoApiClient(
     public async Task<MetazoExplanationResponse?> GetExplanationAsync(string datatype, CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("Calling GetExplanationAsync for datatype: {Datatype}", datatype);
-        var json = await ExecuteWithTokenRefreshAsync(async ct =>
+
+        return await ExecuteWithTokenRefreshAsync(async ct =>
         {
             var token = await _tokenProvider.GetTokenAsync(ct);
             Dictionary<string, string> parameters = new()
@@ -87,12 +93,10 @@ public class MetazoApiClient(
             var checksum = _checksumService.CalculateChecksum(parameters, _options.ChecksumSecret);
             parameters.Add("checksum", checksum);
 
-            var url = BuildUrl("explain", parameters);
-            _logger.LogDebug("Requesting URL: {Url}", url);
-            return await SendGetRequestAsync(url, ct);
-        }, cancellationToken);
+            var url = _urlBuilder.BuildUrl("explain", parameters);
 
-        return JsonSerializer.Deserialize<MetazoExplanationResponse>(json);
+            return await _apiRequestSender.SendGetRequestAsync<MetazoExplanationResponse>(url, ct);
+        }, cancellationToken);
     }
 
     /// <summary>
@@ -126,9 +130,9 @@ public class MetazoApiClient(
             var checksum = _checksumService.CalculateChecksum(parameters, _options.ChecksumSecret);
             parameters.Add("checksum", checksum);
 
-            var url = BuildUrl("list", parameters);
-            _logger.LogDebug("Requesting URL: {Url}", url);
-            return await SendGetRequestAsync(url, ct);
+            var url = _urlBuilder.BuildUrl("list", parameters);
+
+            return await _apiRequestSender.SendGetRequestAsync<JsonElement>(url, ct);
         }, cancellationToken);
     }
 
@@ -147,8 +151,30 @@ public class MetazoApiClient(
     public async Task<MetazoListResponse<T>?> GetListAsync<T>(ListRequest dataRequest, CancellationToken cancellationToken = default)
         where T : IMetazoListItem
     {
-        var response = await GetListAsync(dataRequest, cancellationToken);
-        return JsonSerializer.Deserialize<MetazoListResponse<T>>(response);
+        _logger.LogInformation("Calling GetListAsync with DataType: {DataType}", dataRequest.DataType);
+        return await ExecuteWithTokenRefreshAsync(async ct =>
+        {
+            var token = await _tokenProvider.GetTokenAsync(ct);
+            Dictionary<string, string> parameters = new()
+            {
+                { "datatype", dataRequest.DataType },
+                { "fields", dataRequest.FieldsToGet },
+                { "limit", dataRequest.Limit.ToString() },
+                { "offset", dataRequest.Offset.ToString() },
+                { "searchandor", dataRequest.SearchAndOr },
+                { "search", dataRequest.SearchAfter ?? dataRequest.FromDate.ToString("yyyy-MM-dd") },
+                { "searchcomp", dataRequest.SearchOperation },
+                { "searchfield", dataRequest.SearchField },
+                { "token", token }
+            };
+
+            var checksum = _checksumService.CalculateChecksum(parameters, _options.ChecksumSecret);
+            parameters.Add("checksum", checksum);
+
+            var url = _urlBuilder.BuildUrl("list", parameters);
+
+            return await _apiRequestSender.SendGetRequestAsync<MetazoListResponse<T>>(url, ct);
+        }, cancellationToken);
     }
     
     /// <summary>
@@ -175,9 +201,9 @@ public class MetazoApiClient(
             var checksum = _checksumService.CalculateChecksum(parameters, _options.ChecksumSecret);
             parameters.Add("checksum", checksum);
 
-            var url = BuildUrl("read", parameters);
-            _logger.LogDebug("Requesting URL: {Url}", url);
-            return await SendGetRequestAsync(url, ct);
+            var url = _urlBuilder.BuildUrl("read", parameters);
+
+            return await _apiRequestSender.SendGetRequestAsync<JsonElement>(url, ct);
         }, cancellationToken);
     }
 
@@ -196,8 +222,23 @@ public class MetazoApiClient(
     public async Task<MetazoItemResponse<T>?> GetItemAsync<T>(int objectId, CancellationToken cancellationToken = default)
         where T : IMetazoItemObject
     {
-        var response = await GetItemAsync(objectId, cancellationToken);
-        return JsonSerializer.Deserialize<MetazoItemResponse<T>>(response);
+        _logger.LogInformation("Calling GetItemAsync for ObjectId: {ObjectId}", objectId);
+        return await ExecuteWithTokenRefreshAsync(async ct =>
+        {
+            var token = await _tokenProvider.GetTokenAsync(ct);
+            Dictionary<string, string> parameters = new()
+            {
+                { "objectid", objectId.ToString() },
+                { "token", token }
+            };
+
+            var checksum = _checksumService.CalculateChecksum(parameters, _options.ChecksumSecret);
+            parameters.Add("checksum", checksum);
+
+            var url = _urlBuilder.BuildUrl("read", parameters);
+
+            return await _apiRequestSender.SendGetRequestAsync<MetazoItemResponse<T>>(url, ct);
+        }, cancellationToken);
     }
 
     /// <summary>
@@ -232,9 +273,9 @@ public class MetazoApiClient(
             var checksum = _checksumService.CalculateChecksum(parameters, _options.ChecksumSecret, crudModel.JsonData);
             parameters.Add("checksum", checksum);
 
-            var url = BuildUrl("model", parameters);
-            _logger.LogDebug("Posting model to URL: {Url}", url);
-            return await SendPostRequestAsync(url, crudModel.JsonData, ct);
+            var url = _urlBuilder.BuildUrl("model", parameters);
+
+            return await _apiRequestSender.SendPostRequestAsync<JsonElement>(url, crudModel.JsonData, ct);
         }, cancellationToken);
     }
 
@@ -267,7 +308,7 @@ public class MetazoApiClient(
 
             foreach (var file in model.Files)
             {
-                var fileChecksum = await CalculateFileChecksumAsync(file.Value, ct);
+                var fileChecksum = await _fileChecksumService.CalculateChecksumAsync(file.Value, ct);
                 fileChecksums.Add(file.Key, fileChecksum);
             }
 
@@ -288,23 +329,21 @@ public class MetazoApiClient(
             var checksum = _checksumService.CalculateChecksum(parameters, _options.ChecksumSecret);
             parameters.Add("checksum", checksum);
 
-            var url = BuildUrl("binfile/upload", parameters);
-            _logger.LogDebug("Uploading files to URL: {Url}", url);
-            return await SendMultipartFormDataAsync(url, model.Files, ct);
+            var url = _urlBuilder.BuildUrl("binfile/upload", parameters);
+
+            return await _apiRequestSender.SendMultipartFormDataAsync(url, model.Files, ct);
         }, cancellationToken);
     }
 
-    // Helper methods
-
-    private async Task<JsonElement> ExecuteWithTokenRefreshAsync(Func<CancellationToken, Task<JsonElement>> action, CancellationToken cancellationToken = default)
+    private async Task<T> ExecuteWithTokenRefreshAsync<T>(Func<CancellationToken, Task<T>> action, CancellationToken cancellationToken = default)
     {
         try
         {
             return await action(cancellationToken);
         }
-        catch (TokenInvalidException tiex)
+        catch (TokenInvalidException tokenInvalidException)
         {
-            _logger.LogWarning(tiex, "Token invalid. Refreshing token and retrying.");
+            _logger.LogWarning(tokenInvalidException, "Token invalid. Refreshing token and retrying.");
             await _tokenProvider.RefreshTokenAsync(cancellationToken);
             return await action(cancellationToken);
         }
@@ -315,100 +354,4 @@ public class MetazoApiClient(
         }
     }
 
-    private static async Task<string> CalculateFileChecksumAsync(Stream fileContent, CancellationToken cancellationToken = default)
-    {
-        fileContent.Position = 0;
-        byte[] buffer = new byte[256];
-        int bytesRead = await fileContent.ReadAsync(buffer.AsMemory(0, 256), cancellationToken);
-        byte[] hash = SHA1.HashData(buffer.AsSpan(0, bytesRead));
-        fileContent.Position = 0;
-        return BitConverter.ToString(hash).Replace("-", "").ToLowerInvariant();
-    }
-
-    private string BuildUrl(string endpoint, Dictionary<string, string> parameters)
-    {
-        var query = string.Join("&", parameters.Select(kvp => $"{kvp.Key}={Uri.EscapeDataString(kvp.Value)}"));
-        return $"{_options.IpwUrl}{endpoint}?{query}";
-    }
-
-    private async Task<JsonElement> SendGetRequestAsync(string url, CancellationToken cancellationToken = default)
-    {
-        var client = _httpClientFactory.CreateClient();
-        var response = await client.GetAsync(url, cancellationToken);
-
-        if (response.IsSuccessStatusCode)
-        {
-            var contentString = await response.Content.ReadAsStringAsync(cancellationToken);
-            return JsonSerializer.Deserialize<JsonElement>(contentString);
-        }
-        else
-        {
-            var errorContent = await response.Content.ReadAsStringAsync(cancellationToken);
-            if (IsTokenInvalidError(errorContent))
-            {
-                throw new TokenInvalidException("Token is invalid or has been revoked.");
-            }
-            _logger.LogError("Error calling API: {StatusCode} - {ErrorContent}", response.StatusCode, errorContent);
-            throw new Exception($"Error calling API: {response.StatusCode} - {errorContent}");
-        }
-    }
-
-    private async Task<JsonElement> SendPostRequestAsync(string url, string jsonData, CancellationToken cancellationToken = default)
-    {
-        var client = _httpClientFactory.CreateClient();
-        var content = new StringContent(jsonData, Encoding.UTF8, "application/json");
-        var response = await client.PostAsync(url, content, cancellationToken);
-
-        if (response.IsSuccessStatusCode)
-        {
-            var contentString = await response.Content.ReadAsStringAsync(cancellationToken);
-            return JsonSerializer.Deserialize<JsonElement>(contentString);
-        }
-        else
-        {
-            var errorContent = await response.Content.ReadAsStringAsync(cancellationToken);
-            if (IsTokenInvalidError(errorContent))
-            {
-                throw new TokenInvalidException("Token is invalid or has been revoked.");
-            }
-            _logger.LogError("Error calling API: {StatusCode} - {ErrorContent}", response.StatusCode, errorContent);
-            throw new Exception($"Error calling API: {response.StatusCode} - {errorContent}");
-        }
-    }
-
-    private async Task<JsonElement> SendMultipartFormDataAsync(string url, Dictionary<string, Stream> files, CancellationToken cancellationToken = default)
-    {
-        var client = _httpClientFactory.CreateClient();
-        using MultipartFormDataContent content = new();
-
-        foreach (var file in files)
-        {
-            var filePath = ((FileStream)file.Value).Name;
-            var fileNameAndExtension = Path.GetFileName(filePath);
-            content.Add(new StreamContent(file.Value), file.Key, fileNameAndExtension);
-        }
-
-        var response = await client.PostAsync(url, content, cancellationToken);
-
-        if (response.IsSuccessStatusCode)
-        {
-            var contentString = await response.Content.ReadAsStringAsync(cancellationToken);
-            return JsonSerializer.Deserialize<JsonElement>(contentString);
-        }
-        else
-        {
-            var errorContent = await response.Content.ReadAsStringAsync(cancellationToken);
-            if (IsTokenInvalidError(errorContent))
-            {
-                throw new TokenInvalidException("Token is invalid or has been revoked.");
-            }
-            _logger.LogError("Error uploading file: {StatusCode} - {ErrorContent}", response.StatusCode, errorContent);
-            throw new Exception($"Error uploading file: {response.StatusCode} - {errorContent}");
-        }
-    }
-
-    private static bool IsTokenInvalidError(string errorContent)
-    {
-        return errorContent.Contains("Token doesn't exist in the database");
-    }
 }

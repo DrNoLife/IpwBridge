@@ -1,4 +1,4 @@
-﻿using IpwBridge.Interfaces;
+﻿using IpwBridge.Interfaces.Models;
 using System.Text.Json.Serialization;
 
 namespace IpwBridge.Models.Responses.List;

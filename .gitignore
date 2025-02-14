@@ -397,3 +397,4 @@ FodyWeavers.xsd
 # JetBrains Rider
 *.sln.iml
 /IpwBridge/IpwBridge.Testing
+/IpwBridge/IpwBridge.Benchmarks

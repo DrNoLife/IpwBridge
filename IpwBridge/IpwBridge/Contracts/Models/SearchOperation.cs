@@ -1,4 +1,5 @@
 ﻿using IpwBridge.Contracts.Enums;
+using System.Diagnostics.CodeAnalysis;
 
 namespace IpwBridge.Contracts.Models;
 
@@ -16,7 +17,7 @@ namespace IpwBridge.Contracts.Models;
 /// SearchOperation operation = "LESSEQUAL";
 /// ]]></code>
 /// </example>
-public readonly struct SearchOperation(string value)
+public readonly struct SearchOperation(string value) : IEquatable<SearchOperation>
 {
     /// <summary>
     /// Gets the string value representing the search operation.
@@ -49,4 +50,19 @@ public readonly struct SearchOperation(string value)
     /// </summary>
     /// <returns>A string that represents the current search operation.</returns>
     public override string ToString() => Value;
+
+    public override bool Equals([NotNullWhen(true)] object? obj)
+        => obj is SearchOperation other && Equals(other);
+
+    public bool Equals(SearchOperation other)
+        => String.Equals(Value, other.Value, StringComparison.Ordinal);
+
+    public static bool operator ==(SearchOperation left, SearchOperation right)
+        => left.Equals(right);
+
+    public static bool operator !=(SearchOperation left, SearchOperation right)
+        => !(left == right);
+
+    public override int GetHashCode()
+        => StringComparer.Ordinal.GetHashCode(Value);
 }

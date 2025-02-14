@@ -5,8 +5,8 @@ namespace IpwBridge.Models.Responses.Explanation;
 public class MetazoExplanationModel
 {
     [JsonPropertyName("id")]
-    public required string Id { get; set; }
+    public required string Id { get; init; }
 
     [JsonPropertyName("name")]
-    public required string Name{ get; set; }
+    public required string Name{ get; init; }
 }

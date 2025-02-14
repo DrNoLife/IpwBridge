@@ -1,4 +1,4 @@
-﻿namespace IpwBridge.Interfaces;
+﻿namespace IpwBridge.Interfaces.Services;
 
 public interface ITokenProvider
 {

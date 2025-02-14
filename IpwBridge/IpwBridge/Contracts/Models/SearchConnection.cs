@@ -1,4 +1,5 @@
 ﻿using IpwBridge.Contracts.Enums;
+using System.Diagnostics.CodeAnalysis;
 
 namespace IpwBridge.Contracts.Models;
 
@@ -16,7 +17,7 @@ namespace IpwBridge.Contracts.Models;
 /// SearchConnection connection = "OR";
 /// ]]></code>
 /// </example>
-public readonly struct SearchConnection(string value)
+public readonly struct SearchConnection(string value) : IEquatable<SearchConnection>
 {
     /// <summary>
     /// Gets the string value representing the search connection.
@@ -49,4 +50,20 @@ public readonly struct SearchConnection(string value)
     /// </summary>
     /// <returns>A string that represents the current search connection.</returns>
     public override string ToString() => Value;
+
+    public override bool Equals([NotNullWhen(true)] object? obj)
+        => obj is SearchConnection other && Equals(other);
+
+    public bool Equals(SearchConnection other)
+        => String.Equals(Value, other.Value, StringComparison.Ordinal);
+
+    public static bool operator ==(SearchConnection left, SearchConnection right)
+        => left.Equals(right);
+
+    public static bool operator !=(SearchConnection left, SearchConnection right)
+        => !(left == right);
+
+    public override int GetHashCode() 
+        => StringComparer.Ordinal.GetHashCode(Value);
+
 }

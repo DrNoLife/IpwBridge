@@ -27,17 +27,17 @@ namespace IpwBridge.Contracts;
 /// };
 /// ]]></code>
 /// </example>
-public class ListRequest
+public sealed class ListRequest
 {
     /// <summary>
     /// Gets or sets the data type to be queried.
     /// </summary>
-    public string DataType { get; set; } = string.Empty;
+    public string DataType { get; set; } = String.Empty;
 
     /// <summary>
     /// Gets or sets a comma-separated list of fields to retrieve in the response.
     /// </summary>
-    public string FieldsToGet { get; set; } = string.Empty;
+    public string FieldsToGet { get; set; } = String.Empty;
 
     /// <summary>
     /// Gets or sets the maximum number of items to return.
@@ -79,7 +79,7 @@ public class ListRequest
     /// <remarks>
     /// This can be an identifier, a part of a name, or any other value against which the search is performed.
     /// </remarks>
-    public string SearchAfter { get; set; } = string.Empty;
+    public string SearchAfter { get; set; } = String.Empty;
 
     /// <summary>
     /// Gets or sets the starting date from which items should be considered.

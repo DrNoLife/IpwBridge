@@ -1,4 +1,4 @@
-﻿using IpwBridge.Interfaces;
+﻿using IpwBridge.Interfaces.Services;
 using IpwBridge.Models;
 using IpwBridge.Services;
 using Microsoft.Extensions.DependencyInjection;
@@ -9,7 +9,7 @@ public static class ServiceCollectionExtensions
 {
     public static IServiceCollection AddIpwBridge(this IServiceCollection services, Action<MetazoApiOptions> configureOptions)
     {
-        services.AddHttpClient();
+        services.AddHttpClient(Constants.HttpClientName);
 
         services.Configure(configureOptions);
 
@@ -17,6 +17,9 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IChecksumService, ChecksumService>();
         services.AddSingleton<ITokenProvider, TokenProvider>();
         services.AddTransient<IMetazoApiClient, MetazoApiClient>();
+        services.AddTransient<IFileChecksumService, FileChecksumService>();
+        services.AddTransient<IUrlBuilder, UrlBuilder>();
+        services.AddTransient<IApiRequestSender, ApiRequestSender>();
 
         return services;
     }
