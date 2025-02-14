@@ -22,10 +22,7 @@ public readonly struct SearchConnection(string value) : IEquatable<SearchConnect
     /// <summary>
     /// Gets the string value representing the search connection.
     /// </summary>
-    public string Value { get; } 
-        = !String.IsNullOrEmpty(value) 
-            ? value 
-            : throw new ArgumentException("Search connection value cannot be empty.", nameof(value));
+    public string Value { get; } = value;
 
     /// <summary>
     /// Implicitly converts a <see cref="SearchConnector"/> value to a <see cref="SearchConnection"/>.
