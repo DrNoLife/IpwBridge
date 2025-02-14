@@ -2,7 +2,7 @@
 using Microsoft.Extensions.Logging;
 using System.Text.Json;
 using IpwBridge.Models;
-using IpwBridge.Interfaces;
+using IpwBridge.Interfaces.Services;
 
 namespace IpwBridge.Services;
 

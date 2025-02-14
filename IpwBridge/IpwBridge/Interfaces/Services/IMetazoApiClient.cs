@@ -1,11 +1,12 @@
 ﻿using IpwBridge.Contracts;
+using IpwBridge.Interfaces.Models;
 using IpwBridge.Models.Responses.Datatypes;
 using IpwBridge.Models.Responses.Explanation;
 using IpwBridge.Models.Responses.Item;
 using IpwBridge.Models.Responses.List;
 using System.Text.Json;
 
-namespace IpwBridge.Interfaces;
+namespace IpwBridge.Interfaces.Services;
 
 /// <summary>
 /// Defines methods for interacting with the IPW Metazo API.

@@ -1,4 +1,4 @@
-﻿namespace IpwBridge.Interfaces;
+﻿namespace IpwBridge.Interfaces.Models;
 
 public interface IMetazoListItem
 {
