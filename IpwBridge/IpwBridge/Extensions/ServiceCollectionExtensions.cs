@@ -9,7 +9,7 @@ public static class ServiceCollectionExtensions
 {
     public static IServiceCollection AddIpwBridge(this IServiceCollection services, Action<MetazoApiOptions> configureOptions)
     {
-        services.AddHttpClient();
+        services.AddHttpClient(Constants.HttpClientName);
 
         services.Configure(configureOptions);
 

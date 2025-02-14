@@ -13,7 +13,7 @@ public class ApiRequestSender(IHttpClientFactory httpClientFactory, ILogger<ApiR
 
     public async Task<JsonElement> SendGetRequestAsync(string url, CancellationToken cancellationToken = default)
     {
-        var client = _httpClientFactory.CreateClient();
+        var client = _httpClientFactory.CreateClient("Metazo");
         using var request = new HttpRequestMessage(HttpMethod.Get, url);
         using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
 
@@ -31,9 +31,29 @@ public class ApiRequestSender(IHttpClientFactory httpClientFactory, ILogger<ApiR
         }
     }
 
+    public async Task<T> SendGetRequestAsync<T>(string url, CancellationToken cancellationToken = default)
+    {
+        var client = _httpClientFactory.CreateClient("Metazo");
+        using var request = new HttpRequestMessage(HttpMethod.Get, url);
+        using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+
+        if (response.IsSuccessStatusCode)
+        {
+            await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+            return await JsonSerializer.DeserializeAsync<T>(stream, cancellationToken: cancellationToken) 
+                ?? throw new IpwBridgeDeserializationException($"Failed to deserialize the JSON response into an object of type '{typeof(T).Name}'. Ensure that the JSON is valid and matches the expected schema.");
+        }
+        else
+        {
+            string errorContent = await response.Content.ReadAsStringAsync(cancellationToken);
+            HandleErrorResponse(response.StatusCode.ToString(), errorContent);
+            throw new IpwBridgeCommunicationException("Unhandled error in GET request."); 
+        }
+    }
+
     public async Task<JsonElement> SendPostRequestAsync(string url, string jsonData, CancellationToken cancellationToken = default)
     {
-        var client = _httpClientFactory.CreateClient();
+        var client = _httpClientFactory.CreateClient("Metazo");
         using var content = new StringContent(jsonData, Encoding.UTF8, "application/json");
         using var request = new HttpRequestMessage(HttpMethod.Post, url) { Content = content };
         using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
@@ -52,9 +72,30 @@ public class ApiRequestSender(IHttpClientFactory httpClientFactory, ILogger<ApiR
         }
     }
 
+    public async Task<T> SendPostRequestAsync<T>(string url, string jsonData, CancellationToken cancellationToken = default)
+    {
+        var client = _httpClientFactory.CreateClient("Metazo");
+        using var content = new StringContent(jsonData, Encoding.UTF8, "application/json");
+        using var request = new HttpRequestMessage(HttpMethod.Post, url) { Content = content };
+        using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+
+        if (response.IsSuccessStatusCode)
+        {
+            await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+            return await JsonSerializer.DeserializeAsync<T>(stream, cancellationToken: cancellationToken)
+                ?? throw new IpwBridgeDeserializationException($"Failed to deserialize the JSON response into an object of type '{typeof(T).Name}'. Ensure that the JSON is valid and matches the expected schema.");
+        }
+        else
+        {
+            string errorContent = await response.Content.ReadAsStringAsync(cancellationToken);
+            HandleErrorResponse(response.StatusCode.ToString(), errorContent);
+            throw new IpwBridgeCommunicationException("Unhandled error in POST request.");
+        }
+    }
+
     public async Task<JsonElement> SendMultipartFormDataAsync(string url, Dictionary<string, Stream> files, CancellationToken cancellationToken = default)
     {
-        var client = _httpClientFactory.CreateClient();
+        var client = _httpClientFactory.CreateClient("Metazo");
         using var content = new MultipartFormDataContent();
         foreach (var file in files)
         {

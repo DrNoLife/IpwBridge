@@ -24,7 +24,6 @@ namespace IpwBridge.Services;
 /// </remarks>
 public class MetazoApiClient(
     IOptions<MetazoApiOptions> options,
-    IHttpClientFactory httpClientFactory,
     ITokenProvider tokenProvider,
     IChecksumService checksumService,
     ILogger<MetazoApiClient> logger,
@@ -33,7 +32,6 @@ public class MetazoApiClient(
     IApiRequestSender apiRequestSender) : IMetazoApiClient
 {
     private readonly MetazoApiOptions _options = options.Value;
-    private readonly IHttpClientFactory _httpClientFactory = httpClientFactory;
     private readonly ITokenProvider _tokenProvider = tokenProvider;
     private readonly IChecksumService _checksumService = checksumService;
     private readonly ILogger<MetazoApiClient> _logger = logger;
@@ -155,8 +153,30 @@ public class MetazoApiClient(
     public async Task<MetazoListResponse<T>?> GetListAsync<T>(ListRequest dataRequest, CancellationToken cancellationToken = default)
         where T : IMetazoListItem
     {
-        var response = await GetListAsync(dataRequest, cancellationToken);
-        return JsonSerializer.Deserialize<MetazoListResponse<T>>(response);
+        _logger.LogInformation("Calling GetListAsync with DataType: {DataType}", dataRequest.DataType);
+        return await ExecuteWithTokenRefreshAsync(async ct =>
+        {
+            var token = await _tokenProvider.GetTokenAsync(ct);
+            Dictionary<string, string> parameters = new()
+            {
+                { "datatype", dataRequest.DataType },
+                { "fields", dataRequest.FieldsToGet },
+                { "limit", dataRequest.Limit.ToString() },
+                { "offset", dataRequest.Offset.ToString() },
+                { "searchandor", dataRequest.SearchAndOr },
+                { "search", dataRequest.SearchAfter ?? dataRequest.FromDate.ToString("yyyy-MM-dd") },
+                { "searchcomp", dataRequest.SearchOperation },
+                { "searchfield", dataRequest.SearchField },
+                { "token", token }
+            };
+
+            var checksum = _checksumService.CalculateChecksum(parameters, _options.ChecksumSecret);
+            parameters.Add("checksum", checksum);
+
+            var url = _urlBuilder.BuildUrl("list", parameters);
+
+            return await _apiRequestSender.SendGetRequestAsync<MetazoListResponse<T>>(url, ct);
+        }, cancellationToken);
     }
     
     /// <summary>
@@ -302,17 +322,15 @@ public class MetazoApiClient(
         }, cancellationToken);
     }
 
-    // Helper methods
-
-    private async Task<JsonElement> ExecuteWithTokenRefreshAsync(Func<CancellationToken, Task<JsonElement>> action, CancellationToken cancellationToken = default)
+    private async Task<T> ExecuteWithTokenRefreshAsync<T>(Func<CancellationToken, Task<T>> action, CancellationToken cancellationToken = default)
     {
         try
         {
             return await action(cancellationToken);
         }
-        catch (TokenInvalidException tiex)
+        catch (TokenInvalidException tokenInvalidException)
         {
-            _logger.LogWarning(tiex, "Token invalid. Refreshing token and retrying.");
+            _logger.LogWarning(tokenInvalidException, "Token invalid. Refreshing token and retrying.");
             await _tokenProvider.RefreshTokenAsync(cancellationToken);
             return await action(cancellationToken);
         }
@@ -322,4 +340,5 @@ public class MetazoApiClient(
             throw;
         }
     }
+
 }
