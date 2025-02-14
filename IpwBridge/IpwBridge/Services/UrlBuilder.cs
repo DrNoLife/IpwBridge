@@ -1,9 +1,8 @@
-﻿using IpwBridge.Interfaces;
-using IpwBridge.Interfaces.Services;
+﻿using IpwBridge.Interfaces.Services;
 using IpwBridge.Models;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using System.Buffers.Text;
+using System.Text.RegularExpressions;
 
 namespace IpwBridge.Services;
 
@@ -34,8 +33,19 @@ public class UrlBuilder(IOptions<MetazoApiOptions> options, ILogger<UrlBuilder> 
             url = $"{url}?{query}";
         }
 
-        _logger.LogDebug("Built URL: {Url}", url);
+        _logger.LogDebug("Built URL: {Url}", GetSafeUrl(url));
 
         return url;
+    }
+
+    public string GetSafeUrl(string url)
+    {
+        if (String.IsNullOrEmpty(url))
+        {
+            return url;
+        }
+
+        // Replace the value for the "token" parameter with "<token-hidden>".
+        return Regex.Replace(url, "(?<=token=)[^&]*", "<token-hidden>", RegexOptions.IgnoreCase);
     }
 }

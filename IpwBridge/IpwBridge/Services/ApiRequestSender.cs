@@ -6,14 +6,18 @@ using System.Text.Json;
 
 namespace IpwBridge.Services;
 
-public class ApiRequestSender(IHttpClientFactory httpClientFactory, ILogger<ApiRequestSender> logger) : IApiRequestSender
+public class ApiRequestSender(
+    IHttpClientFactory httpClientFactory, 
+    ILogger<ApiRequestSender> logger,
+    IUrlBuilder urlBuilder) : IApiRequestSender
 {
     private readonly IHttpClientFactory _httpClientFactory = httpClientFactory;
     private readonly ILogger<ApiRequestSender> _logger = logger;
+    private readonly IUrlBuilder _urlBuilder = urlBuilder;
 
     public async Task<T> SendGetRequestAsync<T>(string url, CancellationToken cancellationToken = default)
     {
-        _logger.LogDebug("Sending GET request to URL: {Url}", url);
+        _logger.LogDebug("Sending GET request to URL: {Url}", _urlBuilder.GetSafeUrl(url));
 
         var client = _httpClientFactory.CreateClient("Metazo");
         using var request = new HttpRequestMessage(HttpMethod.Get, url);
@@ -29,13 +33,13 @@ public class ApiRequestSender(IHttpClientFactory httpClientFactory, ILogger<ApiR
             // If the caller expects a type other than JsonElement and we got a null value, then throw an exception.
             if (result is null && typeof(T) != typeof(JsonElement))
             {
-                _logger.LogError("Deserialization failed for type {TypeName} from URL: {Url}", typeof(T).Name, url);
+                _logger.LogError("Deserialization failed for type {TypeName} from URL: {Url}", typeof(T).Name, _urlBuilder.GetSafeUrl(url));
                 throw new IpwBridgeDeserializationException(
                     $"Failed to deserialize the JSON response into an object of type '{typeof(T).Name}'. " +
                     "Ensure that the JSON is valid and matches the expected schema.");
             }
 
-            _logger.LogDebug("Deserialization succeeded for type {TypeName} from URL: {Url}", typeof(T).Name, url);
+            _logger.LogDebug("Deserialization succeeded for type {TypeName} from URL: {Url}", typeof(T).Name, _urlBuilder.GetSafeUrl(url));
             return result!;
         }
         else
@@ -50,7 +54,7 @@ public class ApiRequestSender(IHttpClientFactory httpClientFactory, ILogger<ApiR
 
     public async Task<T> SendPostRequestAsync<T>(string url, string jsonData, CancellationToken cancellationToken = default)
     {
-        _logger.LogDebug("Sending POST request to URL: {Url} with payload: {Payload}", url, jsonData);
+        _logger.LogDebug("Sending POST request to URL: {Url} with payload: {Payload}", _urlBuilder.GetSafeUrl(url), jsonData);
 
         var client = _httpClientFactory.CreateClient("Metazo");
         using var content = new StringContent(jsonData, Encoding.UTF8, "application/json");
@@ -67,14 +71,14 @@ public class ApiRequestSender(IHttpClientFactory httpClientFactory, ILogger<ApiR
             // If the caller expects a type other than JsonElement and we got a null value, then throw an exception.
             if (result is null && typeof(T) != typeof(JsonElement))
             {
-                _logger.LogError("Deserialization failed for type {TypeName} from URL: {Url}", typeof(T).Name, url);
+                _logger.LogError("Deserialization failed for type {TypeName} from URL: {Url}", typeof(T).Name, _urlBuilder.GetSafeUrl(url));
 
                 throw new IpwBridgeDeserializationException(
                     $"Failed to deserialize the JSON response into an object of type '{typeof(T).Name}'. " +
                     "Ensure that the JSON is valid and matches the expected schema.");
             }
 
-            _logger.LogDebug("Deserialization succeeded for type {TypeName} from URL: {Url}", typeof(T).Name, url);
+            _logger.LogDebug("Deserialization succeeded for type {TypeName} from URL: {Url}", typeof(T).Name, _urlBuilder.GetSafeUrl(url));
             return result!;
         }
         else

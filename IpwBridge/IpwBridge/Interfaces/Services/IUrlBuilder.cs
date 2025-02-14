@@ -9,4 +9,5 @@ public interface IUrlBuilder
     /// <param name="parameters">Query parameters as key/value pairs.</param>
     /// <returns>A fully constructed URL.</returns>
     string BuildUrl(string endpoint, Dictionary<string, string> parameters);
+    string GetSafeUrl(string url);
 }
