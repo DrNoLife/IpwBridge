@@ -1,5 +1,10 @@
 ﻿using IpwBridge.Exceptions;
 using IpwBridge.Interfaces.Services;
+using IpwBridge.Models.Responses;
+using IpwBridge.Models.Responses.Datatypes;
+using IpwBridge.Models.Responses.Explanation;
+using IpwBridge.Models.Responses.Item;
+using IpwBridge.Models.Responses.List;
 using Microsoft.Extensions.Logging;
 using System.Text;
 using System.Text.Json;
@@ -28,7 +33,14 @@ public class ApiRequestSender(
         if (response.IsSuccessStatusCode)
         {
             await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
-            T? result = await JsonSerializer.DeserializeAsync<T>(stream, cancellationToken: cancellationToken);
+            T? result;
+
+            // Choose the precompiled context if available:
+            var typeInfo = JsonContext.Default.GetTypeInfo(typeof(T)) as System.Text.Json.Serialization.Metadata.JsonTypeInfo<T>;
+
+            result = typeInfo is not null
+                ? await JsonSerializer.DeserializeAsync<T>(stream, typeInfo, cancellationToken: cancellationToken)
+                : await JsonSerializer.DeserializeAsync<T>(stream, cancellationToken: cancellationToken);
 
             // If the caller expects a type other than JsonElement and we got a null value, then throw an exception.
             if (result is null && typeof(T) != typeof(JsonElement))
@@ -66,7 +78,14 @@ public class ApiRequestSender(
         if (response.IsSuccessStatusCode)
         {
             await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
-            T? result = await JsonSerializer.DeserializeAsync<T>(stream, cancellationToken: cancellationToken);
+            T? result;
+
+            // Choose the precompiled context if available:
+            var typeInfo = JsonContext.Default.GetTypeInfo(typeof(T)) as System.Text.Json.Serialization.Metadata.JsonTypeInfo<T>;
+
+            result = typeInfo is not null
+                ? await JsonSerializer.DeserializeAsync<T>(stream, typeInfo, cancellationToken: cancellationToken)
+                : await JsonSerializer.DeserializeAsync<T>(stream, cancellationToken: cancellationToken);
 
             // If the caller expects a type other than JsonElement and we got a null value, then throw an exception.
             if (result is null && typeof(T) != typeof(JsonElement))
