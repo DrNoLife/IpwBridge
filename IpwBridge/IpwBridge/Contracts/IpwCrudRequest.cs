@@ -1,4 +1,5 @@
 ﻿using IpwBridge.Contracts.Enums;
+using IpwBridge.Contracts.Models;
 
 namespace IpwBridge.Contracts;
 
@@ -19,7 +20,7 @@ public sealed class IpwCrudRequest
     /// <summary>
     /// Gets or sets the model option indicating the type of operation (e.g., Create, Update, Delete).
     /// </summary>
-    public ModelOptions Model { get; set; }
+    public CrudModel Model { get; set; }
 
     /// <summary>
     /// Gets or sets the JSON payload containing the data for the operation.
