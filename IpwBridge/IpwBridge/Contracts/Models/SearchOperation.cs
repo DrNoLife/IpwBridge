@@ -29,7 +29,7 @@ public readonly struct SearchOperation(string value) : IEquatable<SearchOperatio
     /// </summary>
     /// <param name="searchOperation">The <see cref="SearchOperator"/> value to convert.</param>
     public static implicit operator SearchOperation(SearchOperator searchOperation)
-        => new(searchOperation.ToString());
+        => new(searchOperation.ToString().ToUpper());
 
     /// <summary>
     /// Implicitly converts a <see cref="string"/> to a <see cref="SearchOperation"/>.

@@ -198,4 +198,6 @@ public interface IMetazoApiClient
     /// ]]></code>
     /// </example>
     Task<JsonElement> UploadBinfileAsync(BinfileUploadRequest binfileUploadModel, CancellationToken cancellationToken = default);
+
+    Task<byte[]> DownloadBinFileAsync(int objectId, CancellationToken cancellationToken = default);
 }

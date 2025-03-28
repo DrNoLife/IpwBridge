@@ -255,7 +255,8 @@ public class MetazoApiClient(
     public async Task<JsonElement> SendModelAsync(IpwCrudRequest crudModel, CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("Calling SendModelAsync for Datatype: {Datatype}, Model: {Model}", crudModel.Datatype, crudModel.Model);
-        return await ExecuteWithTokenRefreshAsync(async ct =>
+
+        var jsonElement = await ExecuteWithTokenRefreshAsync(async ct =>
         {
             var token = await _tokenProvider.GetTokenAsync(ct);
             Dictionary<string, string> parameters = new()
@@ -277,6 +278,10 @@ public class MetazoApiClient(
 
             return await _apiRequestSender.SendPostRequestAsync<JsonElement>(url, crudModel.JsonData, ct);
         }, cancellationToken);
+
+        _logger.LogDebug("SendModelAsync completed work. Response from Metazo was:\n{JsonElement}", jsonElement);
+
+        return jsonElement;
     }
 
     /// <summary>
@@ -335,11 +340,38 @@ public class MetazoApiClient(
         }, cancellationToken);
     }
 
+    public async Task<byte[]> DownloadBinFileAsync(int objectId, CancellationToken cancellationToken = default)
+    {
+        _logger.LogInformation("Calling {BinFileDownMethod} for {ParameterName}: {ObjectId}", nameof(DownloadBinFileAsync), nameof(objectId), objectId);
+
+        return await ExecuteWithTokenRefreshAsync(async ct =>
+        {
+            var token = await _tokenProvider.GetTokenAsync(ct);
+
+            Dictionary<string, string> parameters = new()
+            {
+                { "objectid", objectId.ToString() },
+                { "token", token }
+            };
+
+            var checksum = _checksumService.CalculateChecksum(parameters, _options.ChecksumSecret);
+            parameters.Add("checksum", checksum);
+
+            var url = _urlBuilder.BuildUrl("binfile/download", parameters);
+
+            return await _apiRequestSender.SendGetRequestAsync<byte[]>(url, ct);
+        }, cancellationToken);
+    }
+
     private async Task<T> ExecuteWithTokenRefreshAsync<T>(Func<CancellationToken, Task<T>> action, CancellationToken cancellationToken = default)
     {
         try
         {
             return await action(cancellationToken);
+        }
+        catch (OperationCanceledException) 
+        {
+            throw;
         }
         catch (TokenInvalidException tokenInvalidException)
         {

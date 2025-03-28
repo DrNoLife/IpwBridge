@@ -58,7 +58,7 @@ public class ApiRequestSender(
         {
             string errorContent = await response.Content.ReadAsStringAsync(cancellationToken); 
             _logger.LogError("GET request to URL {Url} failed with status code {StatusCode}. Error: {ErrorContent}",
-                url, response.StatusCode, errorContent);
+                _urlBuilder.GetSafeUrl(url), response.StatusCode, errorContent);
             HandleErrorResponse(response.StatusCode.ToString(), errorContent);
             throw new IpwBridgeCommunicationException("Unhandled error in GET request."); // Should not reach here.
         }
@@ -104,7 +104,7 @@ public class ApiRequestSender(
         {
             string errorContent = await response.Content.ReadAsStringAsync(cancellationToken);
             _logger.LogError("POST request to URL {Url} failed with status code {StatusCode}. Error: {ErrorContent}",
-                url, response.StatusCode, errorContent);
+                _urlBuilder.GetSafeUrl(url), response.StatusCode, errorContent);
             HandleErrorResponse(response.StatusCode.ToString(), errorContent);
             throw new IpwBridgeCommunicationException("Unhandled error in POST request.");
         }

@@ -29,7 +29,7 @@ public readonly struct SearchField(string value) : IEquatable<SearchField>
     /// </summary>
     /// <param name="searchField">The <see cref="DefaultSearchFields"/> value to convert.</param>
     public static implicit operator SearchField(DefaultSearchFields searchField)
-        => new(searchField.ToString());
+        => new(searchField.ToString().ToLower());
 
     /// <summary>
     /// Implicitly converts a <see cref="string"/> to a <see cref="SearchField"/>.

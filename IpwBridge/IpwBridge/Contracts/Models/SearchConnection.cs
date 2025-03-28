@@ -29,7 +29,7 @@ public readonly struct SearchConnection(string value) : IEquatable<SearchConnect
     /// </summary>
     /// <param name="searchConnector">The <see cref="SearchConnector"/> value to convert.</param>
     public static implicit operator SearchConnection(SearchConnector searchConnector)
-        => new(searchConnector.ToString());
+        => new(searchConnector.ToString().ToUpper());
 
     /// <summary>
     /// Implicitly converts a <see cref="string"/> to a <see cref="SearchConnection"/>.
