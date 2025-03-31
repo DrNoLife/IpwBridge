@@ -21,9 +21,11 @@ public class MetazoListResponse<T> where T : IMetazoListItem
     public required int Count { get; init; }
 
     [JsonPropertyName("limit")]
-    public required string Limit { get; init; }
+    [JsonNumberHandling(JsonNumberHandling.AllowReadingFromString)]
+    public required int Limit { get; init; }
 
     [JsonPropertyName("offset")]
+    [JsonNumberHandling(JsonNumberHandling.AllowReadingFromString)]
     public required int Offset { get; init; }
 
     [JsonPropertyName("items")]
