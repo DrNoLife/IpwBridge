@@ -30,38 +30,43 @@ public class ApiRequestSender(
 
         _logger.LogDebug("Received GET response with status code: {StatusCode}", response.StatusCode);
 
-        if (response.IsSuccessStatusCode)
+        if (!response.IsSuccessStatusCode)
         {
-            await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
-            T? result;
+            string errorContent = await response.Content.ReadAsStringAsync(cancellationToken);
 
-            // Choose the precompiled context if available:
-            var typeInfo = JsonContext.Default.GetTypeInfo(typeof(T)) as System.Text.Json.Serialization.Metadata.JsonTypeInfo<T>;
-
-            result = typeInfo is not null
-                ? await JsonSerializer.DeserializeAsync<T>(stream, typeInfo, cancellationToken: cancellationToken)
-                : await JsonSerializer.DeserializeAsync<T>(stream, cancellationToken: cancellationToken);
-
-            // If the caller expects a type other than JsonElement and we got a null value, then throw an exception.
-            if (result is null && typeof(T) != typeof(JsonElement))
-            {
-                _logger.LogError("Deserialization failed for type {TypeName} from URL: {Url}", typeof(T).Name, _urlBuilder.GetSafeUrl(url));
-                throw new IpwBridgeDeserializationException(
-                    $"Failed to deserialize the JSON response into an object of type '{typeof(T).Name}'. " +
-                    "Ensure that the JSON is valid and matches the expected schema.");
-            }
-
-            _logger.LogDebug("Deserialization succeeded for type {TypeName} from URL: {Url}", typeof(T).Name, _urlBuilder.GetSafeUrl(url));
-            return result!;
-        }
-        else
-        {
-            string errorContent = await response.Content.ReadAsStringAsync(cancellationToken); 
             _logger.LogError("GET request to URL {Url} failed with status code {StatusCode}. Error: {ErrorContent}",
                 _urlBuilder.GetSafeUrl(url), response.StatusCode, errorContent);
+
             HandleErrorResponse(response.StatusCode.ToString(), errorContent);
-            throw new IpwBridgeCommunicationException("Unhandled error in GET request."); // Should not reach here.
+
+            throw new IpwBridgeCommunicationException("Unhandled error in GET request."); 
         }
+
+        if (typeof(T) == typeof(byte[]))
+        {
+            var data = await response.Content.ReadAsByteArrayAsync(cancellationToken);
+            return (T)(object)data;
+        }
+
+        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+
+        var typeInfo = JsonContext.Default.GetTypeInfo(typeof(T)) as System.Text.Json.Serialization.Metadata.JsonTypeInfo<T>;
+
+        var result = typeInfo is not null
+            ? await JsonSerializer.DeserializeAsync<T>(stream, typeInfo, cancellationToken: cancellationToken)
+            : await JsonSerializer.DeserializeAsync<T>(stream, cancellationToken: cancellationToken);
+
+        // If the caller expects a type other than JsonElement and we got a null value, then throw an exception.
+        if (result is null && typeof(T) != typeof(JsonElement))
+        {
+            _logger.LogError("Deserialization failed for type {TypeName} from URL: {Url}", typeof(T).Name, _urlBuilder.GetSafeUrl(url));
+            throw new IpwBridgeDeserializationException(
+                $"Failed to deserialize the JSON response into an object of type '{typeof(T).Name}'. " +
+                "Ensure that the JSON is valid and matches the expected schema.");
+        }
+
+        _logger.LogDebug("Deserialization succeeded for type {TypeName} from URL: {Url}", typeof(T).Name, _urlBuilder.GetSafeUrl(url));
+        return result!;
     }
 
     public async Task<T> SendPostRequestAsync<T>(string url, string jsonData, CancellationToken cancellationToken = default)
