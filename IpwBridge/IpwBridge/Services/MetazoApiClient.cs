@@ -1,389 +1,329 @@
-﻿using IpwBridge.Models;
-using Microsoft.Extensions.Options;
-using System.Text.Json;
+using System.Runtime.CompilerServices;
 using System.Text;
+using System.Text.Json;
 using IpwBridge.Contracts;
-using System.Security.Cryptography;
-using IpwBridge.Models.Responses.List;
-using IpwBridge.Models.Responses.Item;
+using IpwBridge.Exceptions;
+using IpwBridge.Interfaces.Services;
+using IpwBridge.Models;
+using IpwBridge.Models.Responses;
 using IpwBridge.Models.Responses.Datatypes;
 using IpwBridge.Models.Responses.Explanation;
+using IpwBridge.Models.Responses.Item;
+using IpwBridge.Models.Responses.List;
+using IpwBridge.Serialization;
 using Microsoft.Extensions.Logging;
-using IpwBridge.Interfaces.Services;
-using IpwBridge.Interfaces.Models;
-using IpwBridge.Exceptions;
+using Microsoft.Extensions.Options;
 
 namespace IpwBridge.Services;
 
-/// <summary>
-/// Provides a client for interacting with the IPW Metazo API.
-/// </summary>
-/// <remarks>
-/// This client handles token authentication, checksum calculation, and makes HTTP calls to the API endpoints.
-/// It supports operations such as retrieving data types, explanations, lists, items, sending models, and uploading binary files.
-/// </remarks>
-public class MetazoApiClient(
+/// <inheritdoc cref="IMetazoApiClient"/>
+internal sealed class MetazoApiClient(
     IOptions<MetazoApiOptions> options,
-    ITokenProvider tokenProvider,
-    IChecksumService checksumService,
-    ILogger<MetazoApiClient> logger,
-    IFileChecksumService fileChecksumService,
-    IUrlBuilder urlBuilder,
-    IApiRequestSender apiRequestSender) : IMetazoApiClient
+    TokenProvider tokenProvider,
+    ChecksumService checksumService,
+    UrlBuilder urlBuilder,
+    ApiRequestSender sender,
+    ILogger<MetazoApiClient> logger) : IMetazoApiClient
 {
     private readonly MetazoApiOptions _options = options.Value;
-    private readonly ITokenProvider _tokenProvider = tokenProvider;
-    private readonly IChecksumService _checksumService = checksumService;
-    private readonly ILogger<MetazoApiClient> _logger = logger;
-    private readonly IFileChecksumService _fileChecksumService = fileChecksumService;
-    private readonly IUrlBuilder _urlBuilder = urlBuilder;
-    private readonly IApiRequestSender _apiRequestSender = apiRequestSender;
 
-    /// <summary>
-    /// Retrieves the available data types from the API.
-    /// </summary>
-    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
-    /// <returns>
-    /// A task representing the asynchronous operation. The task result contains a <see cref="MetazoDatatypesResponse"/>
-    /// describing the available data types.
-    /// </returns>
-    public async Task<MetazoDatatypesResponse?> GetDatatypesAsync(CancellationToken cancellationToken = default)
+    public async Task<bool> PingAsync(CancellationToken cancellationToken = default)
     {
-        _logger.LogInformation("Calling GetDatatypesAsync.");
-
-        return await ExecuteWithTokenRefreshAsync(async ct =>
-        {
-            var token = await _tokenProvider.GetTokenAsync(ct);
-            Dictionary<string, string> parameters = new()
-            {
-                { "token", token }
-            };
-
-            var checksum = _checksumService.CalculateChecksum(parameters, _options.ChecksumSecret);
-            parameters.Add("checksum", checksum);
-
-            var url = _urlBuilder.BuildUrl("datatypes", parameters);
-
-            return await _apiRequestSender.SendGetRequestAsync<MetazoDatatypesResponse>(url, ct);
-        }, cancellationToken);
-    }
-
-    /// <summary>
-    /// Retrieves an explanation for the specified data type.
-    /// </summary>
-    /// <param name="datatype">The data type for which an explanation is requested.</param>
-    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
-    /// <returns>
-    /// A task representing the asynchronous operation. The task result contains a <see cref="MetazoExplanationResponse"/>
-    /// with details about the data type.
-    /// </returns>
-    public async Task<MetazoExplanationResponse?> GetExplanationAsync(string datatype, CancellationToken cancellationToken = default)
-    {
-        _logger.LogInformation("Calling GetExplanationAsync for datatype: {Datatype}", datatype);
-
-        return await ExecuteWithTokenRefreshAsync(async ct =>
-        {
-            var token = await _tokenProvider.GetTokenAsync(ct);
-            Dictionary<string, string> parameters = new()
-            {
-                { "datatype", datatype },
-                { "token", token }
-            };
-
-            var checksum = _checksumService.CalculateChecksum(parameters, _options.ChecksumSecret);
-            parameters.Add("checksum", checksum);
-
-            var url = _urlBuilder.BuildUrl("explain", parameters);
-
-            return await _apiRequestSender.SendGetRequestAsync<MetazoExplanationResponse>(url, ct);
-        }, cancellationToken);
-    }
-
-    /// <summary>
-    /// Retrieves a list of items from the API based on the specified request parameters.
-    /// </summary>
-    /// <param name="dataRequest">The parameters for retrieving the list of items.</param>
-    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
-    /// <returns>
-    /// A task representing the asynchronous operation. The task result contains a <see cref="JsonElement"/>
-    /// representing the list response.
-    /// </returns>
-    public async Task<JsonElement> GetListAsync(ListRequest dataRequest, CancellationToken cancellationToken = default)
-    {
-        _logger.LogInformation("Calling GetListAsync with DataType: {DataType}", dataRequest.DataType);
-        return await ExecuteWithTokenRefreshAsync(async ct =>
-        {
-            var token = await _tokenProvider.GetTokenAsync(ct);
-            Dictionary<string, string> parameters = new()
-            {
-                { "datatype", dataRequest.DataType },
-                { "fields", dataRequest.FieldsToGet },
-                { "limit", dataRequest.Limit.ToString() },
-                { "offset", dataRequest.Offset.ToString() },
-                { "searchandor", dataRequest.SearchAndOr },
-                { "search", dataRequest.SearchAfter ?? dataRequest.FromDate.ToString("yyyy-MM-dd") },
-                { "searchcomp", dataRequest.SearchOperation },
-                { "searchfield", dataRequest.SearchField },
-                { "token", token }
-            };
-
-            var checksum = _checksumService.CalculateChecksum(parameters, _options.ChecksumSecret);
-            parameters.Add("checksum", checksum);
-
-            var url = _urlBuilder.BuildUrl("list", parameters);
-
-            return await _apiRequestSender.SendGetRequestAsync<JsonElement>(url, ct);
-        }, cancellationToken);
-    }
-
-    /// <summary>
-    /// Retrieves a list of items from the API and deserializes them into a specified type.
-    /// </summary>
-    /// <typeparam name="T">
-    /// The type into which the list items will be deserialized. This type must implement <see cref="IMetazoListItem"/>.
-    /// </typeparam>
-    /// <param name="dataRequest">The parameters for retrieving the list of items.</param>
-    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
-    /// <returns>
-    /// A task representing the asynchronous operation. The task result contains a <see cref="MetazoListResponse{T}"/>
-    /// with the deserialized list data.
-    /// </returns>
-    public async Task<MetazoListResponse<T>?> GetListAsync<T>(ListRequest dataRequest, CancellationToken cancellationToken = default)
-        where T : IMetazoListItem
-    {
-        _logger.LogInformation("Calling GetListAsync with DataType: {DataType}", dataRequest.DataType);
-        return await ExecuteWithTokenRefreshAsync(async ct =>
-        {
-            var token = await _tokenProvider.GetTokenAsync(ct);
-            Dictionary<string, string> parameters = new()
-            {
-                { "datatype", dataRequest.DataType },
-                { "fields", dataRequest.FieldsToGet },
-                { "limit", dataRequest.Limit.ToString() },
-                { "offset", dataRequest.Offset.ToString() },
-                { "searchandor", dataRequest.SearchAndOr },
-                { "search", dataRequest.SearchAfter ?? dataRequest.FromDate.ToString("yyyy-MM-dd") },
-                { "searchcomp", dataRequest.SearchOperation },
-                { "searchfield", dataRequest.SearchField },
-                { "token", token }
-            };
-
-            var checksum = _checksumService.CalculateChecksum(parameters, _options.ChecksumSecret);
-            parameters.Add("checksum", checksum);
-
-            var url = _urlBuilder.BuildUrl("list", parameters);
-
-            return await _apiRequestSender.SendGetRequestAsync<MetazoListResponse<T>>(url, ct);
-        }, cancellationToken);
-    }
-    
-    /// <summary>
-    /// Retrieves a specific item from the API based on its object ID.
-    /// </summary>
-    /// <param name="objectId">The unique identifier of the object to retrieve.</param>
-    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
-    /// <returns>
-    /// A task representing the asynchronous operation. The task result contains a <see cref="JsonElement"/>
-    /// representing the item.
-    /// </returns>
-    public async Task<JsonElement> GetItemAsync(int objectId, CancellationToken cancellationToken = default)
-    {
-        _logger.LogInformation("Calling GetItemAsync for ObjectId: {ObjectId}", objectId);
-        return await ExecuteWithTokenRefreshAsync(async ct =>
-        {
-            var token = await _tokenProvider.GetTokenAsync(ct);
-            Dictionary<string, string> parameters = new()
-            {
-                { "objectid", objectId.ToString() },
-                { "token", token }
-            };
-
-            var checksum = _checksumService.CalculateChecksum(parameters, _options.ChecksumSecret);
-            parameters.Add("checksum", checksum);
-
-            var url = _urlBuilder.BuildUrl("read", parameters);
-
-            return await _apiRequestSender.SendGetRequestAsync<JsonElement>(url, ct);
-        }, cancellationToken);
-    }
-
-    /// <summary>
-    /// Retrieves a specific item from the API and deserializes it into a specified type.
-    /// </summary>
-    /// <typeparam name="T">
-    /// The type into which the item will be deserialized. This type must implement <see cref="IMetazoItemObject"/>.
-    /// </typeparam>
-    /// <param name="objectId">The unique identifier of the object to retrieve.</param>
-    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
-    /// <returns>
-    /// A task representing the asynchronous operation. The task result contains a <see cref="MetazoItemResponse{T}"/>
-    /// with the deserialized item data.
-    /// </returns>
-    public async Task<MetazoItemResponse<T>?> GetItemAsync<T>(int objectId, CancellationToken cancellationToken = default)
-        where T : IMetazoItemObject
-    {
-        _logger.LogInformation("Calling GetItemAsync for ObjectId: {ObjectId}", objectId);
-        return await ExecuteWithTokenRefreshAsync(async ct =>
-        {
-            var token = await _tokenProvider.GetTokenAsync(ct);
-            Dictionary<string, string> parameters = new()
-            {
-                { "objectid", objectId.ToString() },
-                { "token", token }
-            };
-
-            var checksum = _checksumService.CalculateChecksum(parameters, _options.ChecksumSecret);
-            parameters.Add("checksum", checksum);
-
-            var url = _urlBuilder.BuildUrl("read", parameters);
-
-            return await _apiRequestSender.SendGetRequestAsync<MetazoItemResponse<T>>(url, ct);
-        }, cancellationToken);
-    }
-
-    /// <summary>
-    /// Sends a CRUD model request to the API.
-    /// </summary>
-    /// <param name="crudModel">
-    /// The CRUD request model containing the operation, data type, and JSON payload.
-    /// </param>
-    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
-    /// <returns>
-    /// A task representing the asynchronous operation. The task result contains a <see cref="JsonElement"/>
-    /// representing the API response.
-    /// </returns>
-    public async Task<JsonElement> SendModelAsync(IpwCrudRequest crudModel, CancellationToken cancellationToken = default)
-    {
-        _logger.LogInformation("Calling SendModelAsync for Datatype: {Datatype}, Model: {Model}", crudModel.Datatype, crudModel.Model);
-
-        var jsonElement = await ExecuteWithTokenRefreshAsync(async ct =>
-        {
-            var token = await _tokenProvider.GetTokenAsync(ct);
-            Dictionary<string, string> parameters = new()
-            {
-                { "datatype", crudModel.Datatype },
-                { "model", crudModel.Model.ToString().ToLower() },
-                { "token", token }
-            };
-
-            if (crudModel.ObjectId.HasValue)
-            {
-                parameters.Add("objectid", crudModel.ObjectId.Value.ToString());
-            }
-
-            var checksum = _checksumService.CalculateChecksum(parameters, _options.ChecksumSecret, crudModel.JsonData);
-            parameters.Add("checksum", checksum);
-
-            var url = _urlBuilder.BuildUrl("model", parameters);
-
-            return await _apiRequestSender.SendPostRequestAsync<JsonElement>(url, crudModel.JsonData, ct);
-        }, cancellationToken);
-
-        _logger.LogDebug("SendModelAsync completed work. Response from Metazo was:\n{JsonElement}", jsonElement);
-
-        return jsonElement;
-    }
-
-    /// <summary>
-    /// Uploads binary files to the API.
-    /// </summary>
-    /// <param name="model">
-    /// The binary file upload request model containing the parent ID and file streams.
-    /// </param>
-    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
-    /// <returns>
-    /// A task representing the asynchronous operation. The task result contains a <see cref="JsonElement"/>
-    /// representing the API response.
-    /// </returns>
-    public async Task<JsonElement> UploadBinfileAsync(BinfileUploadRequest model, CancellationToken cancellationToken = default)
-    {
-        _logger.LogInformation("Calling UploadBinfileAsync for ParentId: {ParentId}", model.ParentId);
-        return await ExecuteWithTokenRefreshAsync(async ct =>
-        {
-            if (model.Files.Count == 0)
-            {
-                _logger.LogWarning("No files provided for upload.");
-                throw new ArgumentNullException(nameof(model.Files));
-            }
-
-            var token = await _tokenProvider.GetTokenAsync(ct);
-
-            // Calculate file checksums and prepare query parameters.
-            Dictionary<string, string> fileChecksums = [];
-
-            foreach (var file in model.Files)
-            {
-                var fileChecksum = await _fileChecksumService.CalculateChecksumAsync(file.Value, ct);
-                fileChecksums.Add(file.Key, fileChecksum);
-            }
-
-            // Prepare query parameters.
-            Dictionary<string, string> parameters = new()
-            {
-                { "parentid", model.ParentId.ToString() },
-                { "token", token }
-            };
-
-            // Add file checksums to query parameters.
-            foreach (var fileChecksum in fileChecksums)
-            {
-                parameters.Add(fileChecksum.Key, fileChecksum.Value);
-            }
-
-            // Calculate request checksum.
-            var checksum = _checksumService.CalculateChecksum(parameters, _options.ChecksumSecret);
-            parameters.Add("checksum", checksum);
-
-            var url = _urlBuilder.BuildUrl("binfile/upload", parameters);
-
-            return await _apiRequestSender.SendMultipartFormDataAsync(url, model.Files, ct);
-        }, cancellationToken);
-    }
-
-    public async Task<byte[]> DownloadBinFileAsync(int objectId, CancellationToken cancellationToken = default)
-    {
-        _logger.LogInformation("Calling {BinFileDownMethod} for {ParameterName}: {ObjectId}", nameof(DownloadBinFileAsync), nameof(objectId), objectId);
-
-        return await ExecuteWithTokenRefreshAsync(async ct =>
-        {
-            var token = await _tokenProvider.GetTokenAsync(ct);
-
-            Dictionary<string, string> parameters = new()
-            {
-                { "objectid", objectId.ToString() },
-                { "token", token }
-            };
-
-            var checksum = _checksumService.CalculateChecksum(parameters, _options.ChecksumSecret);
-            parameters.Add("checksum", checksum);
-
-            var url = _urlBuilder.BuildUrl("binfile/download", parameters);
-
-            return await _apiRequestSender.SendGetRequestAsync<byte[]>(url, ct);
-        }, cancellationToken);
-    }
-
-    private async Task<T> ExecuteWithTokenRefreshAsync<T>(Func<CancellationToken, Task<T>> action, CancellationToken cancellationToken = default)
-    {
+        MetazoRequest request = new(HttpMethod.Get, urlBuilder.Build("ping"), "ping", _options.RequestTimeout, Retryable: false);
         try
         {
-            return await action(cancellationToken);
+            await sender.SendJsonAsync<JsonElement>(request, cancellationToken).ConfigureAwait(false);
+            return true;
         }
-        catch (OperationCanceledException) 
+        catch (IpwBridgeException)
         {
-            throw;
-        }
-        catch (TokenInvalidException tokenInvalidException)
-        {
-            _logger.LogWarning(tokenInvalidException, "Token invalid. Refreshing token and retrying.");
-            await _tokenProvider.RefreshTokenAsync(cancellationToken);
-            return await action(cancellationToken);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error executing API call.");
-            throw;
+            return false;
         }
     }
 
+    public async Task<bool> ValidateTokenAsync(CancellationToken cancellationToken = default)
+    {
+        string token = await tokenProvider.GetTokenAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            JsonElement response = await sender
+                .SendJsonAsync<JsonElement>(SignedGet("validate", [], token), cancellationToken)
+                .ConfigureAwait(false);
+
+            bool valid = response.TryGetProperty("validtoken", out var validToken) && MetazoEnvelope.ReadBoolean(validToken) == true;
+            if (!valid)
+            {
+                tokenProvider.Invalidate(token);
+            }
+
+            return valid;
+        }
+        catch (IpwBridgeTokenInvalidException)
+        {
+            tokenProvider.Invalidate(token);
+            return false;
+        }
+    }
+
+    public async Task RevokeTokenAsync(CancellationToken cancellationToken = default)
+    {
+        if (tokenProvider.CachedToken is not { } token)
+        {
+            return;
+        }
+
+        try
+        {
+            await sender.SendJsonAsync<JsonElement>(SignedGet("revoke", [], token), cancellationToken).ConfigureAwait(false);
+            Log.TokenRevoked(logger);
+        }
+        catch (IpwBridgeTokenInvalidException)
+        {
+            // Already unknown to the server; nothing left to revoke.
+        }
+        finally
+        {
+            tokenProvider.Invalidate(token);
+        }
+    }
+
+    public Task<MetazoDatatypesResponse> GetDatatypesAsync(CancellationToken cancellationToken = default)
+        => GetAsync<MetazoDatatypesResponse>("datatypes", [], cancellationToken);
+
+    public Task<MetazoExplanationResponse> GetExplanationAsync(string datatype, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(datatype);
+        return GetAsync<MetazoExplanationResponse>("explain", new() { ["datatype"] = datatype }, cancellationToken);
+    }
+
+    public Task<JsonElement> GetListAsync(ListRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        return GetAsync<JsonElement>("list", request.ToQueryParameters(), cancellationToken);
+    }
+
+    public Task<MetazoListResponse<T>> GetListAsync<T>(ListRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        return GetAsync<MetazoListResponse<T>>("list", request.ToQueryParameters(), cancellationToken);
+    }
+
+    public IAsyncEnumerable<T> GetAllAsync<T>(ListRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        _ = request.ToQueryParameters(); // Validate before the first MoveNextAsync.
+        return GetAllCoreAsync<T>(request, cancellationToken);
+    }
+
+    private async IAsyncEnumerable<T> GetAllCoreAsync<T>(ListRequest request, [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        int offset = request.Offset;
+        while (true)
+        {
+            var page = await GetListAsync<T>(request.WithOffset(offset), cancellationToken).ConfigureAwait(false);
+            foreach (var item in page.Items)
+            {
+                yield return item;
+            }
+
+            // The server may cap the page size; it echoes the limit it applied, so compare with that.
+            int pageSize = page.Limit > 0 ? Math.Min(page.Limit, request.Limit) : request.Limit;
+            if (request.Limit == 0 || page.Items.Count == 0 || page.Items.Count < pageSize)
+            {
+                yield break;
+            }
+
+            offset += page.Items.Count;
+        }
+    }
+
+    public Task<JsonElement> GetItemAsync(int objectId, CancellationToken cancellationToken = default)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(objectId);
+        return GetAsync<JsonElement>("read", new() { ["objectid"] = objectId.ToInvariantString() }, cancellationToken);
+    }
+
+    public Task<MetazoItemResponse<T>> GetItemAsync<T>(int objectId, CancellationToken cancellationToken = default)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(objectId);
+        return GetAsync<MetazoItemResponse<T>>("read", new() { ["objectid"] = objectId.ToInvariantString() }, cancellationToken);
+    }
+
+    public async Task<MetazoModelResponse> SendModelAsync(CrudRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        request.Validate();
+
+        Dictionary<string, string> parameters = new(StringComparer.Ordinal)
+        {
+            ["datatype"] = request.Datatype,
+            ["model"] = request.Model.Value!.ToLowerInvariant(),
+        };
+
+        if (request.ObjectId is { } objectId)
+        {
+            parameters["objectid"] = objectId.ToInvariantString();
+        }
+
+        string json = request.JsonData;
+        JsonElement response = await ExecuteAuthenticatedAsync("model", (token, ct) =>
+        {
+            string url = SignedUrl("model", parameters, token, json);
+            MetazoRequest message = new(HttpMethod.Post, url, "model", _options.RequestTimeout, Retryable: false)
+            {
+                ContentFactory = () => new StringContent(json, Encoding.UTF8, "application/json"),
+            };
+            return sender.SendJsonAsync<JsonElement>(message, ct);
+        }, cancellationToken).ConfigureAwait(false);
+
+        return new MetazoModelResponse(response);
+    }
+
+    public async Task<MetazoUploadResponse> UploadBinfileAsync(BinfileUploadRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        request.Validate();
+
+        PreparedUpload upload = await PreparedUpload.PrepareAsync(request, cancellationToken).ConfigureAwait(false);
+        await using (upload.ConfigureAwait(false))
+        {
+            Dictionary<string, string> parameters = new(StringComparer.Ordinal)
+            {
+                ["parentid"] = request.ParentId.ToInvariantString(),
+            };
+
+            foreach (var (key, checksum) in upload.FileChecksums)
+            {
+                parameters[key] = checksum;
+            }
+
+            JsonElement response = await ExecuteAuthenticatedAsync("binfile/upload", (token, ct) =>
+            {
+                string url = SignedUrl("binfile/upload", parameters, token);
+                MetazoRequest message = new(HttpMethod.Post, url, "binfile/upload", _options.BinfileTimeout, Retryable: false)
+                {
+                    ContentFactory = upload.CreateContent,
+                };
+                return sender.SendJsonAsync<JsonElement>(message, ct);
+            }, cancellationToken).ConfigureAwait(false);
+
+            return new MetazoUploadResponse(response);
+        }
+    }
+
+    public Task<byte[]> DownloadBinfileAsync(int objectId, CancellationToken cancellationToken = default)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(objectId);
+        Dictionary<string, string> parameters = new(StringComparer.Ordinal) { ["objectid"] = objectId.ToInvariantString() };
+
+        return ExecuteAuthenticatedAsync("binfile/download", (token, ct) =>
+            sender.SendForBytesAsync(SignedGet("binfile/download", parameters, token, _options.BinfileTimeout), ct),
+            cancellationToken);
+    }
+
+    public Task DownloadBinfileAsync(int objectId, Stream destination, CancellationToken cancellationToken = default)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(objectId);
+        ArgumentNullException.ThrowIfNull(destination);
+        if (!destination.CanWrite)
+        {
+            throw new ArgumentException("The destination stream must be writable.", nameof(destination));
+        }
+
+        Dictionary<string, string> parameters = new(StringComparer.Ordinal) { ["objectid"] = objectId.ToInvariantString() };
+
+        return ExecuteAuthenticatedAsync("binfile/download", async (token, ct) =>
+        {
+            // Retries and the token refresh happen before anything is written: a rejected token is detected from
+            // the status code, or from a JSON error body, before any byte reaches the destination.
+            await sender.SendToStreamAsync(SignedGet("binfile/download", parameters, token, _options.BinfileTimeout), destination, ct)
+                .ConfigureAwait(false);
+            return true;
+        }, cancellationToken);
+    }
+
+    public Task<JsonElement> GetFilterAsync(int filterId, bool advanced = false, bool includeInactive = false, CancellationToken cancellationToken = default)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(filterId);
+        Dictionary<string, string> parameters = new(StringComparer.Ordinal)
+        {
+            ["advanced"] = advanced ? "1" : "0",
+            ["includeinactive"] = includeInactive ? "1" : "0",
+        };
+
+        return SendFilterAsync($"filter/{filterId.ToInvariantString()}", parameters, cancellationToken);
+    }
+
+    public Task<JsonElement> GetFilterCountAsync(int filterId, CancellationToken cancellationToken = default)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(filterId);
+        return SendFilterAsync($"filter/{filterId.ToInvariantString()}/count", [], cancellationToken);
+    }
+
+    private Task<JsonElement> SendFilterAsync(string endpoint, Dictionary<string, string> parameters, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(_options.DatasourceToken))
+        {
+            throw new InvalidOperationException(
+                $"Quickfilter endpoints require {nameof(MetazoApiOptions)}.{nameof(MetazoApiOptions.DatasourceToken)} to be configured.");
+        }
+
+        MetazoRequest request = new(HttpMethod.Get, urlBuilder.Build(endpoint, parameters), "filter", _options.RequestTimeout, Retryable: true)
+        {
+            Headers = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["site"] = _options.Site.ToInvariantString(),
+                ["username"] = _options.IpwUser,
+                ["usertoken"] = _options.DatasourceToken,
+            },
+        };
+
+        return sender.SendJsonAsync<JsonElement>(request, cancellationToken);
+    }
+
+    private Task<T> GetAsync<T>(string endpoint, Dictionary<string, string> parameters, CancellationToken cancellationToken)
+        => ExecuteAuthenticatedAsync(endpoint, (token, ct) =>
+            sender.SendJsonAsync<T>(SignedGet(endpoint, parameters, token), ct), cancellationToken);
+
+    private MetazoRequest SignedGet(string endpoint, Dictionary<string, string> parameters, string token, TimeSpan? timeout = null)
+        => new(HttpMethod.Get, SignedUrl(endpoint, parameters, token), endpoint, timeout ?? _options.RequestTimeout, Retryable: true);
+
+    private string SignedUrl(string endpoint, Dictionary<string, string> parameters, string token, string? jsonPayload = null)
+    {
+        Dictionary<string, string> signed = new(parameters, StringComparer.Ordinal) { ["token"] = token };
+        signed["checksum"] = checksumService.Calculate(signed, jsonPayload);
+        return urlBuilder.Build(endpoint, signed);
+    }
+
+    /// <summary>
+    /// Runs <paramref name="action"/> with the current token. If the server rejects the token, the token is
+    /// dropped and the action runs once more with a fresh one.
+    /// </summary>
+    private async Task<T> ExecuteAuthenticatedAsync<T>(
+        string endpoint,
+        Func<string, CancellationToken, Task<T>> action,
+        CancellationToken cancellationToken)
+    {
+        string token = await tokenProvider.GetTokenAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            return await action(token, cancellationToken).ConfigureAwait(false);
+        }
+        catch (IpwBridgeTokenInvalidException)
+        {
+            Log.TokenRejected(logger, endpoint);
+            tokenProvider.Invalidate(token);
+        }
+
+        token = await tokenProvider.GetTokenAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            return await action(token, cancellationToken).ConfigureAwait(false);
+        }
+        catch (IpwBridgeTokenInvalidException ex)
+        {
+            Log.RequestFailed(logger, endpoint, $"a freshly obtained token was rejected as well: {ex.ServerMessage}");
+            throw;
+        }
+    }
 }

@@ -1,55 +1,80 @@
-﻿using IpwBridge.Interfaces.Services;
+using System.Diagnostics.CodeAnalysis;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using IpwBridge.Models;
+using Microsoft.Extensions.Options;
 
 namespace IpwBridge.Services;
 
 /// <summary>
-/// Provides functionality for calculating checksums to secure API requests.
+/// Calculates the HMAC-SHA1 request checksum described in the Metazo documentation.
 /// </summary>
 /// <remarks>
-/// The checksum is generated based on the provided parameters and an optional JSON payload,
-/// using an HMAC algorithm with a secret key. This ensures data integrity and authenticity.
+/// The documented PHP reference sorts the parameters by key (<c>ksort</c>), concatenates <c>key . value</c> and
+/// signs the result with the checksum secret. This implementation follows it: keys are used exactly as sent and
+/// sorted ordinally. For <c>/model</c>, the top-level properties of the JSON body are included as parameters;
+/// booleans and <c>null</c> are converted the way PHP converts them to strings (<c>true</c> becomes <c>"1"</c>,
+/// <c>false</c> and <c>null</c> become <c>""</c>). Numbers, objects and arrays keep their JSON text, which may not
+/// match the server for values such as <c>1.50</c>; send field values as strings to be safe.
 /// </remarks>
-public class ChecksumService : IChecksumService
+internal sealed class ChecksumService(IOptions<MetazoApiOptions> options)
 {
-    /// <summary>
-    /// Calculates a checksum for the given parameters and secret, optionally including a JSON payload.
-    /// </summary>
-    /// <param name="parameters">A dictionary of parameters to be included in the checksum calculation.</param>
-    /// <param name="secret">The secret key used to compute the HMAC.</param>
-    /// <param name="jsonPayload">
-    /// An optional JSON payload whose properties will be parsed and included in the checksum calculation.
-    /// </param>
-    /// <returns>A lowercase hexadecimal string representing the computed checksum.</returns>
-    public string CalculateChecksum(Dictionary<string, string> parameters, string secret, string? jsonPayload = null)
-    {
-        List<KeyValuePair<string, string>> keyValuePairs = [.. parameters];
+    private readonly byte[] _secret = Encoding.UTF8.GetBytes(options.Value.ChecksumSecret);
 
-        if (!String.IsNullOrEmpty(jsonPayload))
+    [SuppressMessage("Security", "CA5350:Do Not Use Weak Cryptographic Algorithms",
+        Justification = "HMAC-SHA1 is mandated by the Metazo API protocol.")]
+    public string Calculate(IReadOnlyDictionary<string, string> parameters, string? jsonPayload = null)
+    {
+        ArgumentNullException.ThrowIfNull(parameters);
+
+        SortedDictionary<string, string> sorted = new(StringComparer.Ordinal);
+        foreach (var (key, value) in parameters)
         {
-            var jsonDocument = JsonDocument.Parse(jsonPayload);
-            foreach (var property in jsonDocument.RootElement.EnumerateObject())
+            Add(sorted, key, value);
+        }
+
+        if (!string.IsNullOrWhiteSpace(jsonPayload))
+        {
+            using var document = JsonDocument.Parse(jsonPayload);
+            if (document.RootElement.ValueKind != JsonValueKind.Object)
             {
-                keyValuePairs.Add(new KeyValuePair<string, string>(
-                    property.Name, property.Value.ToString()));
+                throw new ArgumentException("The JSON data must be a JSON object.", nameof(jsonPayload));
+            }
+
+            foreach (var property in document.RootElement.EnumerateObject())
+            {
+                Add(sorted, property.Name, ToPhpString(property.Value));
             }
         }
 
-        var sortedKeyValuePairs = keyValuePairs
-            .OrderBy(kvp => kvp.Key)
-            .ToList();
+        StringBuilder message = new();
+        foreach (var (key, value) in sorted)
+        {
+            message.Append(key).Append(value);
+        }
 
-        var message = String.Concat(sortedKeyValuePairs.Select(
-            kvp => kvp.Key.ToLower() + kvp.Value));
-
-        using HMACSHA1 hasher = new(Encoding.UTF8.GetBytes(secret));
-        var hash = hasher.ComputeHash(Encoding.UTF8.GetBytes(message));
-
-        return BitConverter
-            .ToString(hash)
-            .Replace("-", "")
-            .ToLowerInvariant();
+        byte[] hash = HMACSHA1.HashData(_secret, Encoding.UTF8.GetBytes(message.ToString()));
+        return Hex.ToLower(hash);
     }
+
+    private static void Add(SortedDictionary<string, string> sorted, string key, string value)
+    {
+        if (!sorted.TryAdd(key, value))
+        {
+            throw new ArgumentException(
+                $"The parameter '{key}' appears more than once; JSON fields may not reuse the name of a query "
+                + "parameter such as datatype, model, objectid or token.");
+        }
+    }
+
+    private static string ToPhpString(JsonElement value) => value.ValueKind switch
+    {
+        JsonValueKind.String => value.GetString()!,
+        JsonValueKind.True => "1",
+        JsonValueKind.False or JsonValueKind.Null or JsonValueKind.Undefined => string.Empty,
+        JsonValueKind.Number => value.GetRawText(),
+        _ => value.GetRawText(),
+    };
+
 }

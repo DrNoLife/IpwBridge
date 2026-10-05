@@ -1,17 +1,22 @@
-﻿using IpwBridge.Models.Responses.Datatypes;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using IpwBridge.Models.Responses.Datatypes;
 using IpwBridge.Models.Responses.Explanation;
 using IpwBridge.Models.Responses.Item;
 using IpwBridge.Models.Responses.List;
-using System.Text.Json.Serialization;
 
 namespace IpwBridge.Models.Responses;
 
-[JsonSourceGenerationOptions(WriteIndented = false, GenerationMode = JsonSourceGenerationMode.Metadata)]
-[JsonSerializable(typeof(MetazoListResponse<MetazoListItem>))]
-[JsonSerializable(typeof(MetazoItemObject))]
-[JsonSerializable(typeof(MetazoItemResponse<MetazoItemObject>))]
-[JsonSerializable(typeof(MetazoExplanationResponse))]
+/// <summary>Source-generated JSON metadata for every type IpwBridge itself deserializes.</summary>
+[JsonSourceGenerationOptions(
+    GenerationMode = JsonSourceGenerationMode.Metadata,
+    NumberHandling = JsonNumberHandling.AllowReadingFromString)]
+[JsonSerializable(typeof(JsonElement))]
+[JsonSerializable(typeof(MetazoAuthenticationResponse))]
 [JsonSerializable(typeof(MetazoDatatypesResponse))]
-public partial class JsonContext : JsonSerializerContext
+[JsonSerializable(typeof(MetazoExplanationResponse))]
+[JsonSerializable(typeof(MetazoListResponse<MetazoListItem>))]
+[JsonSerializable(typeof(MetazoItemResponse<MetazoItemObject>))]
+internal sealed partial class JsonContext : JsonSerializerContext
 {
 }

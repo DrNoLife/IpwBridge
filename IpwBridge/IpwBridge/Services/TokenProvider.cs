@@ -1,134 +1,192 @@
-﻿using Microsoft.Extensions.Options;
-using Microsoft.Extensions.Logging;
 using System.Text.Json;
+using IpwBridge.Exceptions;
 using IpwBridge.Models;
-using IpwBridge.Interfaces.Services;
+using IpwBridge.Models.Responses;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace IpwBridge.Services;
 
 /// <summary>
-/// Provides token-based authentication for interacting with the IPW Metazo API.
+/// Obtains and caches the Metazo token. The token lives until 60 seconds before its JWT <c>exp</c> claim (or until
+/// <c>exp</c> itself for very short-lived tokens), 25 minutes for tokens without a readable or future <c>exp</c>,
+/// or until the server rejects it.
 /// </summary>
-/// <remarks>
-/// The <see cref="TokenProvider"/> manages retrieval and refreshing of authentication tokens,
-/// ensuring that a valid token is used for API calls. It employs a semaphore to handle concurrent requests.
-/// </remarks>
-public class TokenProvider(
+internal sealed class TokenProvider(
     IOptions<MetazoApiOptions> options,
-    IHttpClientFactory httpClientFactory,
-    IChecksumService checksumService,
-    ILogger<TokenProvider> logger) : ITokenProvider
+    ApiRequestSender sender,
+    ChecksumService checksumService,
+    UrlBuilder urlBuilder,
+    IpwBridgeClock clock,
+    ILogger<TokenProvider> logger) : IDisposable
 {
     private readonly MetazoApiOptions _options = options.Value;
-    private readonly IHttpClientFactory _httpClientFactory = httpClientFactory;
-    private readonly SemaphoreSlim _semaphore = new(1, 1);
-    private readonly IChecksumService _checksumService = checksumService;
-    private readonly ILogger<TokenProvider> _logger = logger;
-    private string _token = String.Empty;
-    private DateTime _tokenExpiry;
+    private readonly SemaphoreSlim _lock = new(1, 1);
 
-    /// <summary>
-    /// Retrieves a valid authentication token. If the current token is expired or not present, a new token is obtained.
-    /// </summary>
-    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
-    /// <returns>
-    /// A task representing the asynchronous operation. The task result contains the valid authentication token as a string.
-    /// </returns>
-    public async Task<string> GetTokenAsync(CancellationToken cancellationToken = default)
+    // Token and expiry are swapped as one immutable object, so readers never see a torn pair.
+    private volatile TokenState? _state;
+
+    /// <summary>Gets the cached token, or <see langword="null"/> when none is cached.</summary>
+    public string? CachedToken => _state?.Token;
+
+    /// <summary>Returns a valid token, authenticating if none is cached or the cached one has expired.</summary>
+    public async Task<string> GetTokenAsync(CancellationToken cancellationToken)
     {
-        if (!string.IsNullOrEmpty(_token) && DateTime.UtcNow < _tokenExpiry)
+        if (_state is { } state && state.ExpiresAt > clock.Time.GetUtcNow())
         {
-            _logger.LogDebug("Returning cached token.");
-            return _token;
+            return state.Token;
         }
 
-        _logger.LogInformation("Token expired or not found. Acquiring new token.");
-        await _semaphore.WaitAsync(cancellationToken);
+        await _lock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            if (!string.IsNullOrEmpty(_token) && DateTime.UtcNow < _tokenExpiry)
+            if (_state is { } current && current.ExpiresAt > clock.Time.GetUtcNow())
             {
-                _logger.LogDebug("Token was refreshed by another thread; returning cached token.");
-                return _token;
+                return current.Token;
             }
 
-            _token = await AuthenticateAsync(cancellationToken);
-            _tokenExpiry = DateTime.UtcNow.AddMinutes(25);
-            _logger.LogInformation("New token acquired successfully.");
-            return _token;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error while getting token.");
-            throw;
+            TokenState fresh = await AuthenticateAsync(cancellationToken).ConfigureAwait(false);
+            _state = fresh;
+            Log.TokenAcquired(logger, fresh.ExpiresAt);
+            return fresh.Token;
         }
         finally
         {
-            _semaphore.Release();
+            _lock.Release();
         }
     }
 
     /// <summary>
-    /// Refreshes the authentication token by clearing the current token and retrieving a new one.
+    /// Drops the cached token if it is still <paramref name="rejectedToken"/>. When several calls are rejected
+    /// with the same token at once, only the first drops it and the rest reuse the token it obtains.
     /// </summary>
-    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
-    /// <returns>A task representing the asynchronous operation.</returns>
-    public async Task RefreshTokenAsync(CancellationToken cancellationToken = default)
+    public void Invalidate(string rejectedToken)
     {
-        _logger.LogInformation("Refreshing token.");
-        await _semaphore.WaitAsync(cancellationToken);
-        try
+        var state = _state;
+        if (state is not null && string.Equals(state.Token, rejectedToken, StringComparison.Ordinal))
         {
-            _token = string.Empty;
-            _tokenExpiry = DateTime.MinValue;
-
-            // Reauthenticate.
-            _token = await AuthenticateAsync(cancellationToken);
-            _tokenExpiry = DateTime.UtcNow.AddMinutes(25);
-            _logger.LogInformation("Token refreshed successfully.");
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error while refreshing token.");
-            throw;
-        }
-        finally
-        {
-            _semaphore.Release();
+            Interlocked.CompareExchange(ref _state, null, state);
         }
     }
 
-    private async Task<string> AuthenticateAsync(CancellationToken cancellationToken = default)
+    public void Dispose() => _lock.Dispose();
+
+    private async Task<TokenState> AuthenticateAsync(CancellationToken cancellationToken)
     {
-        _logger.LogDebug("Starting authentication process.");
-        Dictionary<string, string> parameters = new()
+        Dictionary<string, string> parameters = new(StringComparer.Ordinal)
         {
-            { "pass", _options.IpwPassword },
-            { "site", "1" },
-            { "user", _options.IpwUser }
+            ["pass"] = _options.IpwPassword,
+            ["site"] = _options.Site.ToInvariantString(),
+            ["user"] = _options.IpwUser,
         };
 
-        var checksum = _checksumService.CalculateChecksum(parameters, _options.ChecksumSecret);
-        parameters.Add("checksum", checksum);
-
-        var query = String.Join("&", parameters.Select(kvp => $"{kvp.Key}={Uri.EscapeDataString(kvp.Value)}"));
-        var url = $"{_options.IpwUrl}authenticate?{query}";
-
-        var client = _httpClientFactory.CreateClient();
-        var response = await client.GetAsync(url, cancellationToken);
-
-        if (response.IsSuccessStatusCode)
+        if (!string.IsNullOrWhiteSpace(_options.Language))
         {
-            var content = await response.Content.ReadAsStringAsync(cancellationToken);
-            var authResponse = JsonSerializer.Deserialize<IpwAuthenticationSuccessMessage>(content);
-            _logger.LogDebug("Authentication succeeded.");
-            return authResponse?.Token ?? throw new Exception($"Failed to get authentication token, despite API giving good response. {response.StatusCode}");
+            parameters["language"] = _options.Language;
         }
-        else
+
+        parameters["checksum"] = checksumService.Calculate(parameters);
+
+        MetazoRequest request = _options.UseLegacyGetAuthentication
+            ? new MetazoRequest(HttpMethod.Get, urlBuilder.Build("authenticate", parameters), "authenticate", _options.RequestTimeout, Retryable: true)
+            : new MetazoRequest(HttpMethod.Post, urlBuilder.Build("authenticate"), "authenticate", _options.RequestTimeout, Retryable: true)
+            {
+                ContentFactory = () => CreateForm(parameters),
+            };
+
+        MetazoAuthenticationResponse response;
+        try
         {
-            var errorContent = await response.Content.ReadAsStringAsync(cancellationToken);
-            _logger.LogError("Authentication failed: {StatusCode} - {ErrorContent}", response.StatusCode, errorContent);
-            throw new Exception($"Authentication failed: {response.StatusCode} - {errorContent}");
+            response = await sender.SendJsonAsync<MetazoAuthenticationResponse>(request, cancellationToken).ConfigureAwait(false);
         }
+        catch (IpwBridgeException ex) when (ex is not IpwBridgeAuthenticationException)
+        {
+            throw new IpwBridgeAuthenticationException($"Authentication against Metazo failed: {ex.Message}", ex);
+        }
+
+        if (string.IsNullOrWhiteSpace(response.Token))
+        {
+            throw new IpwBridgeAuthenticationException("Authentication against Metazo returned no token.");
+        }
+
+        return new TokenState(response.Token, GetExpiry(response.Token));
     }
+
+    // The documentation sends the login as multipart form data, so that is what is sent here too.
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope",
+        Justification = "The parts are owned by the returned content, which the request disposes.")]
+    private static MultipartFormDataContent CreateForm(Dictionary<string, string> parameters)
+    {
+        MultipartFormDataContent form = new();
+        foreach (var (key, value) in parameters)
+        {
+            form.Add(new StringContent(value), key);
+        }
+
+        return form;
+    }
+
+    private DateTimeOffset GetExpiry(string token)
+    {
+        DateTimeOffset now = clock.Time.GetUtcNow();
+        DateTimeOffset fallback = now + Constants.FallbackTokenLifetime;
+
+        if (TryReadJwtExpiry(token) is not { } expiresAt)
+        {
+            return fallback;
+        }
+
+        // Short-lived tokens still expire at their own exp; only an exp that already passed (clock skew between
+        // client and server) falls back, and a rejected token is then refreshed on first use.
+        DateTimeOffset withMargin = expiresAt - Constants.TokenExpiryMargin;
+        return withMargin > now ? withMargin : expiresAt > now ? expiresAt : fallback;
+    }
+
+    /// <summary>Reads the <c>exp</c> claim of a JWT without validating it (the server does that).</summary>
+    internal static DateTimeOffset? TryReadJwtExpiry(string token)
+    {
+        string[] segments = token.Split('.');
+        if (segments.Length != 3)
+        {
+            return null;
+        }
+
+        try
+        {
+            byte[] payload = DecodeBase64Url(segments[1]);
+            using var document = JsonDocument.Parse(payload);
+            if (document.RootElement.ValueKind == JsonValueKind.Object
+                && document.RootElement.TryGetProperty("exp", out var exp))
+            {
+                long? seconds = exp.ValueKind switch
+                {
+                    JsonValueKind.Number when exp.TryGetInt64(out long n) => n,
+                    JsonValueKind.String when long.TryParse(exp.GetString(), System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out long s) => s,
+                    _ => null,
+                };
+
+                return seconds is { } value ? DateTimeOffset.FromUnixTimeSeconds(value) : null;
+            }
+        }
+        catch (Exception ex) when (ex is FormatException or JsonException or ArgumentOutOfRangeException)
+        {
+            // Not a JWT we can read; the fallback lifetime applies.
+        }
+
+        return null;
+    }
+
+    private static byte[] DecodeBase64Url(string value)
+    {
+        string base64 = value.Replace('-', '+').Replace('_', '/');
+        base64 = (base64.Length % 4) switch
+        {
+            2 => base64 + "==",
+            3 => base64 + "=",
+            _ => base64,
+        };
+        return Convert.FromBase64String(base64);
+    }
+
+    private sealed record TokenState(string Token, DateTimeOffset ExpiresAt);
 }

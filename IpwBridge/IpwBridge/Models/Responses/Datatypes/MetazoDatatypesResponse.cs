@@ -1,15 +1,21 @@
-﻿using System.Text.Json.Serialization;
+using System.Text.Json.Serialization;
 
 namespace IpwBridge.Models.Responses.Datatypes;
 
-public class MetazoDatatypesResponse
+/// <summary>The response from <c>/datatypes</c>.</summary>
+public sealed class MetazoDatatypesResponse
 {
-    [JsonPropertyName("success")]
-    public required string SuccessAsString { get; init; }
+    private readonly IReadOnlyList<MetazoDatatype> _datatypes = [];
 
-    [JsonIgnore]
-    public bool Success => SuccessAsString.Equals("true", StringComparison.OrdinalIgnoreCase);
+    /// <summary>Gets the number of datatypes reported by the API.</summary>
+    [JsonPropertyName("count")]
+    public int Count { get; init; }
 
+    /// <summary>Gets the available datatypes.</summary>
     [JsonPropertyName("datatypes")]
-    public required List<MetazoDatatype> Datatypes { get; init; }
+    public IReadOnlyList<MetazoDatatype> Datatypes
+    {
+        get => _datatypes;
+        init => _datatypes = value ?? [];
+    }
 }
