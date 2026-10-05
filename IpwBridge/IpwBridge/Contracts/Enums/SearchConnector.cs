@@ -1,13 +1,12 @@
-﻿namespace IpwBridge.Contracts.Enums;
+namespace IpwBridge.Contracts.Enums;
 
 /// <summary>
-/// Specifies the logical connector to be used when combining multiple search conditions.
+/// The logical connector used to combine the search conditions of a <see cref="ListRequest"/>.
 /// </summary>
-/// <remarks>
-/// This enum is used to determine whether search criteria should be combined using a logical AND or OR.
-/// </remarks>
 public enum SearchConnector
 {
+    /// <summary>All conditions must match.</summary>
     And,
+    /// <summary>At least one condition must match.</summary>
     Or
 }

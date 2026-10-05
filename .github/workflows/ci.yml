@@ -1,0 +1,85 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.0.x
+            10.0.x
+
+      - name: Restore
+        run: dotnet restore IpwBridge/IpwBridge.sln
+
+      - name: Build
+        run: dotnet build IpwBridge/IpwBridge.sln -c Release --no-restore
+
+      - name: Test
+        run: dotnet test IpwBridge/IpwBridge.sln -c Release --no-build --logger "trx;LogFilePrefix=results"
+
+      - name: Check that the README samples compile
+        run: python3 tools/check-readme-samples.py
+
+      - name: Check that the tag matches the package version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          version=$(dotnet msbuild IpwBridge/IpwBridge/IpwBridge.csproj -getProperty:Version)
+          if [ "v$version" != "${GITHUB_REF_NAME}" ]; then
+            echo "Tag ${GITHUB_REF_NAME} does not match project version $version" >&2
+            exit 1
+          fi
+
+      - name: Pack
+        run: dotnet pack IpwBridge/IpwBridge/IpwBridge.csproj -c Release --no-build -o artifacts
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: packages
+          path: artifacts/*
+
+  publish:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    environment: nuget
+    permissions:
+      contents: read
+      id-token: write # lets NuGet/login exchange GitHub's OIDC token for a short-lived API key (trusted publishing)
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: packages
+          path: artifacts
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      # Trusted publishing: no stored API key. Requires a policy on nuget.org (see README > Releasing).
+      - name: NuGet login (OIDC -> temporary API key)
+        id: login
+        uses: NuGet/login@v1
+        with:
+          user: ${{ vars.NUGET_USER || 'ThorChristiansen' }}
+
+      - name: Push to nuget.org
+        run: >
+          dotnet nuget push "artifacts/*.nupkg"
+          --api-key "${{ steps.login.outputs.NUGET_API_KEY }}"
+          --source https://api.nuget.org/v3/index.json
+          --skip-duplicate

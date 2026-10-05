@@ -1,94 +1,88 @@
-﻿using IpwBridge.Contracts.Enums;
+using IpwBridge.Contracts.Enums;
 using System.Diagnostics.CodeAnalysis;
 
 namespace IpwBridge.Contracts.Models;
 
 /// <summary>
-/// Represents a CRUD model used for performing create, read, update, and delete operations in the IPW system.
+/// The model to run on an object through <c>/model</c>, such as <c>create</c> or a datatype-specific model.
 /// </summary>
 /// <remarks>
-/// This readonly struct supports implicit conversion from both <see cref="ModelOptions"/> and <see cref="string"/>.
+/// Converts implicitly from <see cref="ModelOptions"/> and from <see cref="string"/>. Enum values are converted to
+/// the lowercase name the API expects. Model names are always sent in lowercase, as in 1.x, because
+/// the API uses lowercase model names. A <see langword="default"/> instance has no
+/// value and is rejected when a request is sent.
 /// </remarks>
 /// <example>
 /// <code language="csharp"><![CDATA[
-/// // Example: Implicit conversion of a ModelOptions enum to CrudModel.
-/// CrudModel model = ModelOptions.Create;
-/// // Example: Explicit setting of string value.
-/// CrudModel model = "CREATE";
+/// CrudModel fromEnum = ModelOptions.Create;
+/// CrudModel fromString = "create";
 /// ]]></code>
 /// </example>
-public readonly struct CrudModel(string value) : IEquatable<CrudModel>
+public readonly struct CrudModel : IEquatable<CrudModel>
 {
-    /// <summary>
-    /// Gets the string value representing the CRUD model.
-    /// </summary>
-    public string Value { get; } = value;
+    /// <summary>Initializes a new instance with the given raw value.</summary>
+    /// <param name="value">The value sent to the API.</param>
+    /// <exception cref="ArgumentNullException"><paramref name="value"/> is <see langword="null"/>.</exception>
+    public CrudModel(string value)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+        Value = value;
+    }
 
-    /// <summary>
-    /// Implicitly converts a <see cref="ModelOptions"/> value to a <see cref="CrudModel"/>.
-    /// </summary>
-    /// <param name="modelOption">The <see cref="ModelOptions"/> value to convert.</param>
-    public static implicit operator CrudModel(ModelOptions modelOption)
-        => new(modelOption.ToString().ToUpper());
+    /// <summary>Gets the value sent to the API, or <see langword="null"/> for a <see langword="default"/> instance.</summary>
+    public string? Value { get; }
 
-    /// <summary>
-    /// Implicitly converts a <see cref="string"/> to a <see cref="CrudModel"/>.
-    /// </summary>
-    /// <param name="value">The string value to convert.</param>
+    /// <summary>Converts a <see cref="ModelOptions"/> value to a <see cref="CrudModel"/>.</summary>
+    /// <param name="value">The value to convert.</param>
+    public static implicit operator CrudModel(ModelOptions value)
+        => new(value.ToString().ToLowerInvariant());
+
+    /// <summary>Converts a <see cref="string"/> to a <see cref="CrudModel"/>.</summary>
+    /// <param name="value">The value to convert.</param>
     public static implicit operator CrudModel(string value)
         => new(value);
 
-    /// <summary>
-    /// Implicitly converts a <see cref="CrudModel"/> to a <see cref="string"/>.
-    /// </summary>
-    /// <param name="crudModel">The <see cref="CrudModel"/> instance.</param>
-    public static implicit operator string(CrudModel crudModel)
-        => crudModel.Value;
+    /// <summary>Converts a <see cref="CrudModel"/> to its string value.</summary>
+    /// <param name="value">The value to convert.</param>
+    public static implicit operator string(CrudModel value)
+        => value.Value ?? string.Empty;
 
-    /// <summary>
-    /// Returns a string that represents the current CRUD model.
-    /// </summary>
-    /// <returns>A string that represents the current CRUD model.</returns>
-    public override string ToString() => Value;
+    /// <summary>Creates a <see cref="CrudModel"/> from a <see cref="ModelOptions"/> value.</summary>
+    /// <param name="value">The value to convert.</param>
+    /// <returns>The converted value.</returns>
+    public static CrudModel FromModelOptions(ModelOptions value) => value;
 
-    /// <summary>
-    /// Determines whether the specified object is equal to the current <see cref="CrudModel"/>.
-    /// </summary>
-    /// <param name="obj">The object to compare with the current <see cref="CrudModel"/>.</param>
-    /// <returns>true if the specified object is equal to the current <see cref="CrudModel"/>; otherwise, false.</returns>
+    /// <summary>Creates a <see cref="CrudModel"/> from a string.</summary>
+    /// <param name="value">The value to convert.</param>
+    /// <returns>The converted value.</returns>
+    public static CrudModel FromString(string value) => value;
+
+    /// <inheritdoc/>
+    public override string ToString() => Value ?? string.Empty;
+
+    /// <inheritdoc/>
     public override bool Equals([NotNullWhen(true)] object? obj)
         => obj is CrudModel other && Equals(other);
 
-    /// <summary>
-    /// Determines whether the specified <see cref="CrudModel"/> is equal to the current <see cref="CrudModel"/>.
-    /// </summary>
-    /// <param name="other">The <see cref="CrudModel"/> to compare with the current <see cref="CrudModel"/>.</param>
-    /// <returns>true if the specified <see cref="CrudModel"/> is equal to the current <see cref="CrudModel"/>; otherwise, false.</returns>
+    /// <inheritdoc/>
     public bool Equals(CrudModel other)
         => string.Equals(Value, other.Value, StringComparison.Ordinal);
 
-    /// <summary>
-    /// Determines whether two specified instances of <see cref="CrudModel"/> are equal.
-    /// </summary>
-    /// <param name="left">The first <see cref="CrudModel"/> to compare.</param>
-    /// <param name="right">The second <see cref="CrudModel"/> to compare.</param>
-    /// <returns>true if the two <see cref="CrudModel"/> instances are equal; otherwise, false.</returns>
+    /// <summary>Determines whether two instances are equal.</summary>
+    /// <param name="left">The first value.</param>
+    /// <param name="right">The second value.</param>
+    /// <returns><see langword="true"/> if the values are equal.</returns>
     public static bool operator ==(CrudModel left, CrudModel right)
         => left.Equals(right);
 
-    /// <summary>
-    /// Determines whether two specified instances of <see cref="CrudModel"/> are not equal.
-    /// </summary>
-    /// <param name="left">The first <see cref="CrudModel"/> to compare.</param>
-    /// <param name="right">The second <see cref="CrudModel"/> to compare.</param>
-    /// <returns>true if the two <see cref="CrudModel"/> instances are not equal; otherwise, false.</returns>
+    /// <summary>Determines whether two instances differ.</summary>
+    /// <param name="left">The first value.</param>
+    /// <param name="right">The second value.</param>
+    /// <returns><see langword="true"/> if the values differ.</returns>
     public static bool operator !=(CrudModel left, CrudModel right)
-        => !(left == right);
+        => !left.Equals(right);
 
-    /// <summary>
-    /// Returns a hash code for the current <see cref="CrudModel"/>.
-    /// </summary>
-    /// <returns>A hash code for the current <see cref="CrudModel"/>.</returns>
+    /// <inheritdoc/>
     public override int GetHashCode()
-        => StringComparer.Ordinal.GetHashCode(Value);
+        => Value is null ? 0 : StringComparer.Ordinal.GetHashCode(Value);
 }

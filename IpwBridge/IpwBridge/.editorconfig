@@ -1,0 +1,3 @@
+[*.cs]
+# Library code must not capture the caller's synchronization context.
+dotnet_diagnostic.CA2007.severity = warning

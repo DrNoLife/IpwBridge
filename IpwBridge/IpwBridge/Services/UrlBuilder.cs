@@ -1,54 +1,28 @@
-﻿using IpwBridge.Interfaces.Services;
+using System.Text;
 using IpwBridge.Models;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using System.Text.RegularExpressions;
 
 namespace IpwBridge.Services;
 
-public partial class UrlBuilder(IOptions<MetazoApiOptions> options, ILogger<UrlBuilder> logger) : IUrlBuilder
+/// <summary>Builds absolute endpoint URLs from the configured base URL.</summary>
+internal sealed class UrlBuilder(IOptions<MetazoApiOptions> options)
 {
-    private readonly MetazoApiOptions _options = options?.Value ?? throw new ArgumentNullException(nameof(options));
-    private readonly ILogger<UrlBuilder> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    private readonly string _baseUrl = options.Value.IpwUrl.EndsWith('/') ? options.Value.IpwUrl : options.Value.IpwUrl + "/";
 
-    [GeneratedRegex("(?<=token=)[^&]*", RegexOptions.IgnoreCase)]
-    private static partial Regex TokenRegex();
-
-    public string BuildUrl(string endpoint, Dictionary<string, string> parameters)
+    public string Build(string endpoint, IEnumerable<KeyValuePair<string, string>>? parameters = null)
     {
-        ArgumentException.ThrowIfNullOrEmpty(endpoint, nameof(endpoint));
-        ArgumentException.ThrowIfNullOrEmpty(_options.IpwUrl, nameof(_options.IpwUrl));
+        ArgumentException.ThrowIfNullOrEmpty(endpoint);
 
-        // Ensure the base URL ends with a slash.
-        string baseUrl = _options.IpwUrl.EndsWith('/')
-            ? _options.IpwUrl
-            : _options.IpwUrl + "/";
+        StringBuilder url = new(_baseUrl);
+        url.Append(endpoint);
 
-        string url = $"{baseUrl}{endpoint}";
-
-        if (parameters is not null && parameters.Count > 0)
+        char separator = '?';
+        foreach (var (key, value) in parameters ?? [])
         {
-            IEnumerable<string> parametersStringified = parameters
-                .Select(kvp
-                    => $"{Uri.EscapeDataString(kvp.Key)}={Uri.EscapeDataString(kvp.Value)}");
-
-            var query = String.Join("&", parametersStringified);
-            url = $"{url}?{query}";
+            url.Append(separator).Append(Uri.EscapeDataString(key)).Append('=').Append(Uri.EscapeDataString(value));
+            separator = '&';
         }
 
-        _logger.LogDebug("Built URL: {Url}", GetSafeUrl(url));
-
-        return url;
-    }
-
-    public string GetSafeUrl(string url)
-    {
-        if (String.IsNullOrEmpty(url))
-        {
-            return url;
-        }
-
-        // Replace the value for the "token" parameter with "<token-hidden>".
-        return TokenRegex().Replace(url, "<token-hidden>");
+        return url.ToString();
     }
 }
