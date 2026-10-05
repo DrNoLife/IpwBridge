@@ -3,10 +3,10 @@
 All notable changes to IpwBridge are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses [Semantic Versioning](https://semver.org/).
 
-## [2.0.0] - Unreleased
+## [2.0.0] - 2026-10-05
 
 A reliability and security release based on a full code review. It contains breaking changes; see
-[Migrating from 1.x](README.md#migrating-from-1x).
+[Migrating from 1.x](https://github.com/DrNoLife/IpwBridge#migrating-from-1x).
 
 ### Security
 
@@ -92,3 +92,6 @@ A reliability and security release based on a full code review. It contains brea
 ## [1.4.5]
 
 Last 1.x release.
+
+[2.0.0]: https://github.com/DrNoLife/IpwBridge/releases/tag/v2.0.0
+[1.4.5]: https://www.nuget.org/packages/IpwBridge/1.4.5
